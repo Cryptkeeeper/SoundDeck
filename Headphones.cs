@@ -73,6 +73,62 @@ namespace SoundDeck
             return list.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ThenBy(e => SourceRank(e.Source)).ToList();
         }
 
+        // ----- Auto-detect: match a Windows device name like "Headphones (Arctis Pro Wireless Game)" -----
+
+        // Words in Windows device names that say nothing about the headphone model.
+        static readonly HashSet<string> Noise = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "headphones", "headphone", "headset", "earphone", "earphones", "speakers", "speaker", "game", "chat", "audio",
+            "high", "definition", "nvidia", "amd", "realtek", "r", "tm", "usb", "device", "hands", "free", "ag", "stereo", "digital",
+            "output", "input", "voice", "sst", "intel", "smart", "sound", "technology", "display", "for", "the", "and", "with", "media" };
+        // Words that are often in the device name but not in the measured model's name; dropped on a second try.
+        static readonly HashSet<string> Soft = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "wireless", "bluetooth", "bt", "gaming", "edition", "anc", "le", "hs", "dongle", "receiver", "transmitter", "base", "station" };
+
+        static List<string> Words(string s)
+        {
+            return Regex.Split(s.ToLowerInvariant(), "[^a-z0-9]+").Where(w => w != "").ToList();
+        }
+
+        // Best AutoEq entry for a Windows device name, or null if nothing matches well enough.
+        public static HeadphoneEntry Detect(string deviceName, List<HeadphoneEntry> index)
+        {
+            if (string.IsNullOrEmpty(deviceName) || index == null) return null;
+            // "Headphones (Arctis Pro Wireless Game)" -> "Arctis Pro Wireless Game"
+            int a = deviceName.IndexOf('('), b = deviceName.LastIndexOf(')');
+            string model = a >= 0 && b > a ? deviceName.Substring(a + 1, b - a - 1) : deviceName;
+            var words = Words(model).Where(w => !Noise.Contains(w) && !Regex.IsMatch(w, "^\\d$")).Distinct().ToList();
+            var hit = BestMatch(words, index);
+            if (hit == null) hit = BestMatch(words.Where(w => !Soft.Contains(w)).ToList(), index);
+            return hit;
+        }
+
+        static HeadphoneEntry BestMatch(List<string> words, List<HeadphoneEntry> index)
+        {
+            if (words.Count < 2) return null; // one word ("Logitech") is too vague to guess from
+            HeadphoneEntry best = null; int bestExtra = int.MaxValue, bestRank = int.MaxValue;
+            foreach (var e in index)
+            {
+                var ew = Words(e.Name);
+                if (!ContainsRun(ew, words)) continue; // "Arctis Pro" must not match "Arctis Nova Pro"
+                int extra = ew.Count(w => !words.Contains(w));
+                int rank = SourceRank(e.Source);
+                if (extra < bestExtra || (extra == bestExtra && rank < bestRank)) { best = e; bestExtra = extra; bestRank = rank; }
+            }
+            return best;
+        }
+
+        // True if the words appear next to each other, in order, somewhere in the name.
+        static bool ContainsRun(List<string> name, List<string> run)
+        {
+            for (int i = 0; i + run.Count <= name.Count; i++)
+            {
+                int j = 0;
+                while (j < run.Count && name[i + j] == run[j]) j++;
+                if (j == run.Count) return true;
+            }
+            return false;
+        }
+
         // Measurements from these are the most trusted, so they're listed first.
         static int SourceRank(string s)
         {
@@ -135,6 +191,9 @@ namespace SoundDeck
     {
         Label hpName;
         LinkLabel hpRemove;
+        static List<HeadphoneEntry> hpIndex;     // the AutoEq list, once loaded
+        bool hpIndexLoading;
+        HeadphoneEntry hpDetected;              // what this device looks like, if it has no tuning yet
 
         void BuildHeadphoneEq()
         {
@@ -149,7 +208,13 @@ namespace SoundDeck
             {
                 string k = EqKey("hp");
                 if (k == null) return;
+                if (Settings.Get(k, "") == "")
+                {
+                    if (hpDetected != null) UseDetectedHeadphones(hpDetected); // "Use it"
+                    return;
+                }
                 Settings.Set(k, ""); Settings.Set(EqKey("hpeq"), "");
+                Settings.Set(EqKey("hpno"), true); // removed on purpose: don't suggest it again
                 LoadHeadphoneLabel();
                 ScheduleApo();
             };
@@ -162,9 +227,71 @@ namespace SoundDeck
             if (hpName == null) return;
             string k = EqKey("hp");
             string name = k == null ? "" : Settings.Get(k, "");
-            hpName.Text = name == "" ? "No headphone tuning" : "Tuned for " + name;
-            hpName.ForeColor = name == "" ? Dim : Good;
-            hpRemove.Visible = name != "";
+            hpDetected = null;
+            if (name == "" && k != null) hpDetected = DetectHeadphones();
+            if (name != "") { hpName.Text = "Tuned for " + name; hpName.ForeColor = Good; hpRemove.Text = "Remove"; }
+            else if (hpDetected != null) { hpName.Text = "Detected " + hpDetected.Name; hpName.ForeColor = Fg; hpRemove.Text = "Use it"; }
+            else { hpName.Text = "No headphone tuning"; hpName.ForeColor = Dim; }
+            hpRemove.Visible = name != "" || hpDetected != null;
+        }
+
+        // The AutoEq entry that matches the selected EQ device, if any. Loads the list in the background the first time.
+        HeadphoneEntry DetectHeadphones()
+        {
+            var dev = eqDevice.SelectedItem as DeviceItem;
+            if (dev == null || dev.Name == null || IsVirtualOutput(dev.Name) || IsVirtualCableOut(dev.Name) || IsGoXlr(dev.Name)) return null;
+            if (Settings.GetBool(EqKey("hpno"), false)) return null;
+            if (hpIndex == null)
+            {
+                if (!hpIndexLoading)
+                {
+                    hpIndexLoading = true;
+                    new Thread(() =>
+                    {
+                        List<HeadphoneEntry> got = null;
+                        try { got = AutoEq.LoadIndex(); } catch { }
+                        hpIndex = got;
+                        if (got == null) return;
+                        // At startup the window may not exist yet; wait for it before updating the label.
+                        for (int i = 0; i < 600 && !IsHandleCreated; i++) Thread.Sleep(100);
+                        try { BeginInvoke(new Action(LoadHeadphoneLabel)); } catch { }
+                    }) { IsBackground = true }.Start();
+                }
+                return null;
+            }
+            return AutoEq.Detect(dev.Name, hpIndex);
+        }
+
+        void UseDetectedHeadphones(HeadphoneEntry e)
+        {
+            string key = EqKey("hp");
+            hpName.Text = "Downloading the tuning for " + e.Name + "..."; hpName.ForeColor = Dim;
+            hpRemove.Visible = false;
+            new Thread(() =>
+            {
+                List<string> f = null; string err = null;
+                try { f = AutoEq.LoadFilters(e); } catch (Exception ex) { err = ex.Message; }
+                try
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        if (err != null) { LoadHeadphoneLabel(); MessageBox.Show(this, "Couldn't download the tuning: " + err, "SoundDeck"); return; }
+                        if (EqKey("hp") != key) return; // device was switched meanwhile
+                        ApplyHeadphones(e, f);
+                    }));
+                }
+                catch { }
+            }) { IsBackground = true }.Start();
+        }
+
+        void ApplyHeadphones(HeadphoneEntry e, List<string> filters)
+        {
+            Settings.Set(EqKey("hp"), e.ToString().Replace("   (", " (").Replace("=", " "));
+            Settings.Set(EqKey("hpeq"), string.Join("|", filters));
+            Settings.Set(EqKey("hpno"), false);
+            if (!eqOn.Checked) eqOn.Checked = true; // also saves and writes the config
+            LoadHeadphoneLabel();
+            ScheduleApo();
         }
 
         // Lines to add to Equalizer APO for this device's headphone tuning (empty if none).
@@ -178,14 +305,13 @@ namespace SoundDeck
         void PickHeadphones()
         {
             if (EqKey("hp") == null) { MessageBox.Show(this, "Pick a device first.", "SoundDeck"); return; }
-            using (var dlg = new HeadphonePicker())
+            // Start the search with the detected model (or the device's own name) so it's usually one click.
+            var dev = eqDevice.SelectedItem as DeviceItem;
+            var guess = hpIndex == null || dev == null ? null : AutoEq.Detect(dev.Name, hpIndex);
+            using (var dlg = new HeadphonePicker(guess == null ? "" : guess.Name))
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Filters == null) return;
-                Settings.Set(EqKey("hp"), dlg.Picked.ToString().Replace("   (", " (").Replace("=", " "));
-                Settings.Set(EqKey("hpeq"), string.Join("|", dlg.Filters));
-                if (!eqOn.Checked) eqOn.Checked = true; // also saves and writes the config
-                LoadHeadphoneLabel();
-                ScheduleApo();
+                ApplyHeadphones(dlg.Picked, dlg.Filters);
             }
         }
     }
@@ -203,8 +329,13 @@ namespace SoundDeck
 
         static readonly Color Bg = Color.FromArgb(18, 20, 24), Card = Color.FromArgb(42, 46, 54), Fg = Color.FromArgb(232, 234, 237), Dim = Color.FromArgb(154, 160, 166);
 
-        public HeadphonePicker()
+        string startText;
+
+        public HeadphonePicker() : this("") { }
+
+        public HeadphonePicker(string start)
         {
+            startText = start;
             Text = "Headphone tuning";
             ClientSize = new Size(520, 520);
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
@@ -244,7 +375,9 @@ namespace SoundDeck
                         all = got;
                         status.Text = all.Count + " headphones. Measurements: AutoEq by Jaakko Pasanen.";
                         search.Enabled = true; search.Focus();
+                        if (!string.IsNullOrEmpty(startText) && search.Text == "") { search.Text = startText; search.SelectAll(); }
                         Filter();
+                        if (list.Items.Count > 0 && startText != "") list.SelectedIndex = 0;
                     }));
                 }
                 catch { }
