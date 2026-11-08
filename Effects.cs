@@ -48,7 +48,8 @@ namespace SoundDeck
             fxAmount.ValueChanged += (s, e) => { Settings.Set("fx.amount", fxAmount.Value); ApplyFx(); };
 
             Lbl(p, "Hotkey", 25, 256, 9.5f, false, Dim);
-            fxHotkeyBox = HotkeyBox(p, 150, 252, "fx", 3, (int)Keys.V, FxHotkeyId, RegisterFxHotkey);
+            // No hotkey until you pick one: Ctrl+Alt+V is "paste special" in Office and other apps.
+            fxHotkeyBox = HotkeyBox(p, 150, 252, "fx", 0, 0, FxHotkeyId, RegisterFxHotkey);
             fxHotkeyStatus = Lbl(p, "", 380, 256, 8.5f, false, Dim);
             Lbl(p, "Turns the effect on and off. To hear it yourself, turn on Hear yourself on the Microphone page.", 25, 294, 8.5f, false, Dim);
 
@@ -114,8 +115,8 @@ namespace SoundDeck
         {
             if (!IsHandleCreated || fxHotkeyStatus == null) return;
             UnregisterHotKey(Handle, FxHotkeyId);
-            int vk = Settings.GetInt("fx.vk", (int)Keys.V);
-            int mods = Settings.GetInt("fx.mods", 3);
+            int vk = Settings.GetInt("fx.vk", 0);
+            int mods = Settings.GetInt("fx.mods", 0);
             bool ok = vk != 0 && RegisterHotKey(Handle, FxHotkeyId, (uint)(mods | 0x4000), (uint)vk);
             bool clash = vk != 0 && !ok;
             fxHotkeyStatus.Text = clash ? "Another program already uses that hotkey. Pick a different one." : "Click the box, then press your keys. Backspace clears it.";

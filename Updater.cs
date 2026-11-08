@@ -205,6 +205,8 @@ namespace SoundDeck
                 return;
             }
 
+            SyncAppsEntry();
+
             // First check 30 seconds after starting, then once a day.
             updTimer = new Timer { Interval = 30000 };
             updTimer.Tick += (s, e) =>
@@ -214,6 +216,22 @@ namespace SoundDeck
             };
             updTimer.Start();
             tray.BalloonTipClicked += (s, e) => { if (pendingUpdate != null) { ShowWindow(); ShowPage("Settings"); } };
+        }
+
+        // Keeps the version shown in Windows Settings > Apps in step with this copy (setup only writes it once).
+        static void SyncAppsEntry()
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\SoundDeck", true))
+                {
+                    if (k == null) return;
+                    string loc = (k.GetValue("InstallLocation") as string ?? "").TrimEnd('\\');
+                    if (!string.Equals(loc, Updater.Dir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
+                    if (k.GetValue("DisplayVersion") as string != AppVersion.Value) k.SetValue("DisplayVersion", AppVersion.Value);
+                }
+            }
+            catch { }
         }
 
         void CheckForUpdates(bool userAsked)

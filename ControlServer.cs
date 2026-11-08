@@ -59,8 +59,15 @@ namespace SoundDeck
                 }
                 var r = new StreamReader(s, Encoding.UTF8);
                 string cmd;
+                bool first = true;
                 while ((cmd = r.ReadLine()) != null)
+                {
+                    // A web page can make the browser send an HTTP request here, with commands hidden in its body.
+                    // The plugin never speaks HTTP, so a connection that starts like one is dropped unread.
+                    if (first && LooksLikeHttp(cmd)) return;
+                    first = false;
                     if (cmd.Trim().Length > 0) onCommand(cmd.Trim());
+                }
             }
             catch { }
             finally
@@ -68,6 +75,14 @@ namespace SoundDeck
                 lock (clients) { if (w != null) clients.Remove(w); }
                 c.Close();
             }
+        }
+
+        static bool LooksLikeHttp(string line)
+        {
+            if (line.IndexOf(" HTTP/", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            foreach (var m in new[] { "GET ", "POST ", "PUT ", "HEAD ", "OPTIONS ", "DELETE ", "PATCH ", "CONNECT ", "TRACE " })
+                if (line.StartsWith(m, StringComparison.Ordinal)) return true;
+            return false;
         }
 
         // Remembers the latest line per key (sent to new clients) and pushes changes to connected ones.

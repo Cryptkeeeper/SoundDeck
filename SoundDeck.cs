@@ -482,9 +482,11 @@ namespace SoundDeck
         {
             try
             {
-                if (!File.Exists(path)) return;
+                string file = path;
+                if (!File.Exists(file)) file = path + ".bak"; // the last save was cut off: use the copy before it
+                if (!File.Exists(file)) return;
                 Existed = true;
-                foreach (var line in File.ReadAllLines(path))
+                foreach (var line in File.ReadAllLines(file))
                 {
                     int i = line.IndexOf('=');
                     if (i > 0) d[line.Substring(0, i)] = line.Substring(i + 1);
@@ -498,7 +500,15 @@ namespace SoundDeck
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllLines(path, d.Select(kv => kv.Key + "=" + kv.Value).ToArray());
+                // Write a new file, then swap it in, so a crash or power cut mid-save can't wipe your settings.
+                string tmp = path + ".new";
+                File.WriteAllLines(tmp, d.Select(kv => kv.Key + "=" + kv.Value).ToArray());
+                if (!File.Exists(path)) File.Move(tmp, path);
+                else
+                {
+                    try { File.Replace(tmp, path, path + ".bak", true); }
+                    catch (IOException) { File.Copy(tmp, path, true); File.Delete(tmp); } // e.g. a drive that can't swap files
+                }
                 dirty = false;
             }
             catch { }

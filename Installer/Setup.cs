@@ -124,6 +124,15 @@ namespace SoundDeckSetup
             if (note != null) { var l = Lbl(p, note, x + 20, y + 24, 8.5f, false, Dim); l.MaximumSize = new Size(470, 0); c.Tag = l; }
             return c;
         }
+
+        // A choice that doesn't apply: dimmed and locked. (Disabling it instead draws blurry, embossed text.)
+        public static void Usable(CheckBox c, bool on)
+        {
+            if (on) return;
+            c.AutoCheck = false;
+            c.ForeColor = Dim;
+            c.Cursor = Cursors.Default;
+        }
     }
 
     // ---------------- What's already on this PC ----------------
@@ -397,7 +406,9 @@ namespace SoundDeckSetup
             using (var k = Registry.CurrentUser.CreateSubKey(UninstallKey))
             {
                 k.SetValue("DisplayName", "SoundDeck");
-                k.SetValue("DisplayVersion", "1.0");
+                string ver = "1.0";
+                try { var v = new Version(FileVersionInfo.GetVersionInfo(Exe).FileVersion); ver = v.Major + "." + v.Minor + "." + Math.Max(0, v.Build); } catch { }
+                k.SetValue("DisplayVersion", ver); // SoundDeck keeps this current after each update
                 k.SetValue("Publisher", "SoundDeck");
                 k.SetValue("DisplayIcon", Path.Combine(o.Dir, "SoundDeck.ico"));
                 k.SetValue("InstallLocation", o.Dir);
@@ -508,24 +519,24 @@ namespace SoundDeckSetup
             apo = Ui.Chk(choices, "Equalizer (Equalizer APO)", hasApo
                 ? "Not needed: Equalizer APO is already installed."
                 : "Needed for the Equalizer and mic voice processing. Downloads 11 MB from SourceForge. Windows asks permission, then a window lists your devices: tick your headphones/headset and your mic, then OK. Restart after.", 16, 76);
-            apo.Checked = !hasApo; apo.Enabled = !hasApo;
+            apo.Checked = !hasApo; Ui.Usable(apo, !hasApo);
 
             string vm = Detect.VirtualMic();
             vb = Ui.Chk(choices, "Virtual mic (VB-CABLE)", vm != null
                 ? "Not needed: you already have \"" + vm + "\"."
                 : "Needed to send music, sounds and the cleaned-up mic to Discord and games. Downloads 1 MB from vb-audio.com. Windows asks permission, then click \"Install Driver\". Restart after.", 16, 172);
-            vb.Checked = vm == null; vb.Enabled = vm == null;
+            vb.Checked = vm == null; Ui.Usable(vb, vm == null);
 
             bool hasGox = Detect.Mics().Any(m => m.IndexOf("GoXLR", StringComparison.OrdinalIgnoreCase) >= 0 || m.IndexOf("GO XLR", StringComparison.OrdinalIgnoreCase) >= 0);
             bool hasUtil = Detect.GoxUtilityInstalled();
             gx = Ui.Chk(choices, "GoXLR control (GoXLR Utility)", !hasGox ? "No GoXLR found, so this is skipped."
                 : hasUtil ? "Not needed: GoXLR Utility is already installed."
                 : "Lets SoundDeck control the GoXLR's faders, mutes, mic and colours. Downloads the free, open-source GoXLR Utility (44 MB). Close TC-Helicon's GoXLR App first; only one can run.", 16, 256);
-            gx.Checked = hasGox && !hasUtil; gx.Enabled = hasGox && !hasUtil;
+            gx.Checked = hasGox && !hasUtil; Ui.Usable(gx, hasGox && !hasUtil);
 
             bool hasSd = Detect.StreamDeckExe() != null;
             sd = Ui.Chk(choices, "Stream Deck plugin", hasSd ? "Dials for each channel plus output, sound and profile keys. The Stream Deck app restarts once." : "Stream Deck app not found, so this is skipped.", 16, 318);
-            sd.Checked = hasSd; sd.Enabled = hasSd;
+            sd.Checked = hasSd; Ui.Usable(sd, hasSd);
 
             desk = Ui.Chk(choices, "Desktop shortcut", null, 16, 380); desk.Checked = true;
             start = Ui.Chk(choices, "Start SoundDeck with Windows (hidden in the tray)", null, 16, 414); start.Checked = true;
