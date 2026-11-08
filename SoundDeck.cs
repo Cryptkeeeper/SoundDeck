@@ -631,7 +631,9 @@ namespace SoundDeck
             LoadEqDevice();
             LoadMicDevice();
             UpdateApoStatus();
-            ShowPage("Mixer");
+            // Testing aid: SOUNDDECK_PAGE=<page name> opens that page instead of the Mixer.
+            string startPage = Environment.GetEnvironmentVariable("SOUNDDECK_PAGE");
+            ShowPage(startPage != null && pages.ContainsKey(startPage) ? startPage : "Mixer");
 
             tick = new Timer { Interval = 1000 };
             tick.Tick += (s, e) => OnTick();
