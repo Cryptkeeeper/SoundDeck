@@ -248,8 +248,8 @@ namespace SoundDeckSetup
                 string dll = Path.Combine(o.Dir, "rnnoise_mono.dll");
                 try
                 {
-                    var zip = Download(RnNoiseUrl, RnNoiseSha, "noise removal (RNNoise)", 10, 70);
-                    report(70, "Unpacking noise removal...");
+                    var zip = Download(RnNoiseUrl, RnNoiseSha, "noise removal (RNNoise)", 10, 48);
+                    report(49, "Unpacking noise removal...");
                     using (var z = new ZipArchive(new MemoryStream(zip)))
                     {
                         var entry = z.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').EndsWith("vst/rnnoise_mono.dll", StringComparison.OrdinalIgnoreCase));
@@ -265,11 +265,53 @@ namespace SoundDeckSetup
                 catch (Exception ex) { Warnings.Add("Noise removal wasn't installed: " + ex.Message); }
             }
 
+            string sd = Detect.StreamDeckExe();
+            if (o.StreamDeck && sd != null)
+            {
+                report(52, "Adding the Stream Deck plugin...");
+                try { InstallPlugin(sd); }
+                catch (Exception ex) { Warnings.Add("Stream Deck plugin wasn't installed: " + ex.Message); }
+            }
+
+            // The last steps are extras: if one fails, note it and keep going instead of stopping setup.
+            report(55, "Adding shortcuts...");
+            string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "SoundDeck.lnk");
+            string desktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "SoundDeck.lnk");
+            try { if (o.StartMenu) Shortcut(startMenu, Exe, "Sound mixer, mic mix and soundboard"); }
+            catch (Exception ex) { Warnings.Add("Start menu shortcut wasn't added: " + ex.Message); }
+            try { if (o.Desktop) Shortcut(desktop, Exe, "Sound mixer, mic mix and soundboard"); }
+            catch (Exception ex) { Warnings.Add("Desktop shortcut wasn't added: " + ex.Message); }
+            try
+            {
+                using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                {
+                    if (o.Startup) k.SetValue("SoundDeck", "\"" + Exe + "\" --autostart");
+                    else if ((k.GetValue("SoundDeck") as string ?? "").IndexOf(o.Dir, StringComparison.OrdinalIgnoreCase) >= 0) k.DeleteValue("SoundDeck", false);
+                }
+            }
+            catch (Exception ex) { Warnings.Add("Start with Windows wasn't set: " + ex.Message); }
+
+            report(58, "Adding SoundDeck to Settings > Apps...");
+            try { WriteUninstallEntry(setupCopy); }
+            catch (Exception ex) { Warnings.Add("SoundDeck wasn't added to Settings > Apps: " + ex.Message); }
+
+            // Other programs' installers come last. Equalizer APO's device window offers to restart the PC, and
+            // a restart must not cut setup short: by now SoundDeck, its shortcuts and Settings > Apps entry are done.
+            // If the PC does restart, SoundDeck opens afterwards (RunOnce), unless it already starts with Windows.
+            bool runOnce = !o.Startup && !o.NoLaunch;
+            if (runOnce) SetRunOnce(true);
+            InstallOthers();
+            if (runOnce) SetRunOnce(false); // finished without a restart; Finish() opens SoundDeck itself
+            report(100, "Done.");
+        }
+
+        void InstallOthers()
+        {
             if (o.Apo && Detect.ApoDir() == null)
             {
                 try
                 {
-                    var exe = Download(ApoUrl, ApoSha, "equalizer (Equalizer APO)", 62, 70);
+                    var exe = Download(ApoUrl, ApoSha, "equalizer (Equalizer APO)", 60, 70);
                     string tmp = Path.Combine(Path.GetTempPath(), "EqualizerAPO-x64-1.4.2.exe");
                     File.WriteAllBytes(tmp, exe);
                     report(71, "Installing Equalizer APO. Click Yes when Windows asks...");
@@ -278,6 +320,7 @@ namespace SoundDeckSetup
                     try { File.Delete(tmp); } catch { }
                     if (Detect.ApoDir() == null) throw new Exception("its setup didn't finish");
                     ApoInstalled = true; NeedsRestart = true;
+                    MarkByUs("ApoByUs");
                     // Next, pick which devices get the EQ. Setup usually opens that window itself; open it if not.
                     Thread.Sleep(2000);
                     if (Process.GetProcessesByName("DeviceSelector").Length == 0 && Process.GetProcessesByName("Configurator").Length == 0)
@@ -311,14 +354,15 @@ namespace SoundDeckSetup
             {
                 try
                 {
-                    var zip = Download(VbCableUrl, VbCableSha, "virtual mic (VB-CABLE)", 72, 82);
+                    var zip = Download(VbCableUrl, VbCableSha, "virtual mic (VB-CABLE)", 82, 88);
                     string dir = Path.Combine(o.Dir, "VBCABLE");
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                     using (var z = new ZipArchive(new MemoryStream(zip))) z.ExtractToDirectory(dir);
-                    report(83, "Opening the VB-CABLE installer. Click Yes, then \"Install Driver\"...");
+                    report(89, "Opening the VB-CABLE installer. Click Yes, then \"Install Driver\"...");
                     var psi = new ProcessStartInfo(Path.Combine(dir, "VBCABLE_Setup_x64.exe")) { Verb = "runas", UseShellExecute = true, WorkingDirectory = dir };
                     var p = Process.Start(psi);
                     VbCableStarted = true;
+                    MarkByUs("VBCableByUs");
                     p.WaitForExit();
                     NeedsRestart = true;
                 }
@@ -326,36 +370,26 @@ namespace SoundDeckSetup
                 catch (Exception ex) { Warnings.Add("VB-CABLE wasn't installed: " + ex.Message); }
             }
 
-            string sd = Detect.StreamDeckExe();
-            if (o.StreamDeck && sd != null)
-            {
-                report(88, "Adding the Stream Deck plugin...");
-                try { InstallPlugin(sd); }
-                catch (Exception ex) { Warnings.Add("Stream Deck plugin wasn't installed: " + ex.Message); }
-            }
+        }
 
-            // The last steps are extras: if one fails, note it and keep going instead of stopping setup.
-            report(93, "Adding shortcuts...");
-            string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "SoundDeck.lnk");
-            string desktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "SoundDeck.lnk");
-            try { if (o.StartMenu) Shortcut(startMenu, Exe, "Sound mixer, mic mix and soundboard"); }
-            catch (Exception ex) { Warnings.Add("Start menu shortcut wasn't added: " + ex.Message); }
-            try { if (o.Desktop) Shortcut(desktop, Exe, "Sound mixer, mic mix and soundboard"); }
-            catch (Exception ex) { Warnings.Add("Desktop shortcut wasn't added: " + ex.Message); }
+        void SetRunOnce(bool on)
+        {
             try
             {
-                using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\RunOnce"))
                 {
-                    if (o.Startup) k.SetValue("SoundDeck", "\"" + Exe + "\" --autostart");
-                    else if ((k.GetValue("SoundDeck") as string ?? "").IndexOf(o.Dir, StringComparison.OrdinalIgnoreCase) >= 0) k.DeleteValue("SoundDeck", false);
+                    if (on) k.SetValue("SoundDeckAfterSetup", "\"" + Exe + "\"");
+                    else k.DeleteValue("SoundDeckAfterSetup", false);
                 }
             }
-            catch (Exception ex) { Warnings.Add("Start with Windows wasn't set: " + ex.Message); }
+            catch { }
+        }
 
-            report(97, "Adding SoundDeck to Settings > Apps...");
-            try { WriteUninstallEntry(setupCopy); }
-            catch (Exception ex) { Warnings.Add("SoundDeck wasn't added to Settings > Apps: " + ex.Message); }
-            report(100, "Done.");
+        // Remembered right away, so uninstalling still offers to remove it even if the PC restarts mid-setup.
+        static void MarkByUs(string name)
+        {
+            try { using (var k = Registry.CurrentUser.CreateSubKey(UninstallKey)) k.SetValue(name, 1, RegistryValueKind.DWord); }
+            catch { }
         }
 
         void WriteUninstallEntry(string setupCopy)
