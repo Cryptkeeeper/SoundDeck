@@ -476,12 +476,14 @@ namespace SoundDeck
         static Dictionary<string, string> d = new Dictionary<string, string>();
         static string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SoundDeck", "settings.txt");
         static bool dirty;
+        public static bool Existed; // false on the very first run (fresh install)
 
         public static void Load()
         {
             try
             {
                 if (!File.Exists(path)) return;
+                Existed = true;
                 foreach (var line in File.ReadAllLines(path))
                 {
                     int i = line.IndexOf('=');
@@ -623,7 +625,9 @@ namespace SoundDeck
             BuildSettings();
             BuildTray();
             BuildHearYourself();
+            BuildPushToTalk();
             BuildDynamicsUi();
+            BuildHeadphoneEq();
             BuildUpdates(pages["Settings"]);
             BuildGoXlr(pages["Settings"]);
             BuildGoxLinkUi(pages["Settings"]);
@@ -648,6 +652,7 @@ namespace SoundDeck
             fast.Tick += (s, e) => OnFastTick();
             fast.Start();
             InitScaling();
+            CheckWhatsNew();
             if (StreamerOn)
             {
                 // Streamer mode adds a column, so start wider (but never bigger than the screen).
@@ -977,6 +982,7 @@ namespace SoundDeck
             else if (p[0] == "profile" && cmd.Length > 8) ApplyProfile(cmd.Substring(8), false);
             else if (p[0] == "sidetoggle") ToggleHearYourself();
             else if (p[0] == "chatmute") ToggleChatMute();
+            else if (p[0] == "ptt" && p.Length == 2) pttDeckHeld = p[1] == "down";
             else if (p[0] == "update" && !Updater.IsDevCopy) { autoInstallUpdate = true; CheckForUpdates(false); }
         }
 
@@ -1220,6 +1226,7 @@ namespace SoundDeck
                 for (int i = 0; i < 10; i++)
                     eqBands[i].Value = Math.Max(-12, Math.Min(12, Settings.GetInt(EqKey("b" + i), 0)));
             }
+            LoadHeadphoneLabel();
             loading = prev;
         }
 
@@ -1410,6 +1417,7 @@ namespace SoundDeck
                 var bands = Enumerable.Range(0, 10).Select(i => Settings.GetInt("eq." + g + ".b" + i, 0)).ToArray();
                 sb.AppendLine("# " + d.Name);
                 sb.AppendLine("Device: " + g);
+                try { foreach (var l in HeadphoneLines(g)) sb.AppendLine(l); } catch { } // headphone tuning goes first
                 int max = bands.Max();
                 if (max > 0) sb.AppendLine("Preamp: -" + max + " dB");
                 for (int i = 0; i < 10; i++)

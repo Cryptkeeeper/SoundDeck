@@ -123,6 +123,7 @@ namespace SoundDeckPlugin
                     else if (target == "side") { if (!Command("sidetoggle")) ShowAlert(ctx); }
                     else if (target == "chatmute") { if (!Command("chatmute")) ShowAlert(ctx); }
                     else if (target == "stopsounds") { if (!Command("stopsounds")) ShowAlert(ctx); }
+                    else if (target == "ptt") { if (!Command("ptt down")) ShowAlert(ctx); else SetKeyState(ctx, 1); }
                     else if (target == "sound" || target == "profile")
                     {
                         string item = ItemOf(ctx);
@@ -130,7 +131,16 @@ namespace SoundDeckPlugin
                         if (!Command((target == "sound" ? "play " : "profile ") + item)) ShowAlert(ctx);
                     }
                     break;
+                case "keyUp":
+                    if (target == "ptt") { Command("ptt up"); SetKeyState(ctx, 0); }
+                    break;
             }
+        }
+
+        static void SetKeyState(string ctx, int st)
+        {
+            Send(new Dictionary<string, object> { { "event", "setState" }, { "context", ctx },
+                { "payload", new Dictionary<string, object> { { "state", st } } } });
         }
 
         // ----- Output buttons -----
@@ -247,7 +257,7 @@ namespace SoundDeckPlugin
         {
             if (action == null) return null;
             string last = action.Substring(action.LastIndexOf('.') + 1);
-            if (last == "mix" || last == "side" || last == "sound" || last == "stopsounds" || last == "profile" || last == "chatmute") return last;
+            if (last == "mix" || last == "side" || last == "sound" || last == "stopsounds" || last == "profile" || last == "chatmute" || last == "ptt") return last;
             if (last.EndsWith("out"))
             {
                 string ch = Channels.FirstOrDefault(c => c.Equals(last.Substring(0, last.Length - 3), StringComparison.OrdinalIgnoreCase));
@@ -261,7 +271,7 @@ namespace SoundDeckPlugin
             bool online = soundDeck != null;
             if (target.StartsWith("out:")) { RefreshOutput(ctx, target.Substring(4)); return; }
             if (target == "sound" || target == "profile") { RefreshPick(ctx, target); return; }
-            if (target == "stopsounds") return;
+            if (target == "stopsounds" || target == "ptt") return;
             if (target == "mix" || target == "side" || target == "chatmute")
             {
                 bool on = online && (target == "mix" ? mixOn : target == "side" ? sideOn : chatMuted);

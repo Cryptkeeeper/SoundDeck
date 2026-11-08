@@ -68,6 +68,9 @@ if ([Version]$Version -lt [Version]$current) { throw "Version $Version is lower 
 $src = Get-Content $verFile -Raw
 $src = [regex]::Replace($src, 'Version\("[\d.]+"\)', "Version(""$Version.0"")")
 $src = [regex]::Replace($src, 'Value = "[\d.]+"', "Value = ""$Version""")
+# The notes go into the exe too, for the "What's new" window after updating.
+$csNotes = (($Notes -replace '\\', '\\') -replace '"', '\"') -replace "`r?`n", '\n'
+$src = [regex]::Replace($src, 'Notes = "(?:[^"\\]|\\.)*";', { param($m) "Notes = ""$csNotes"";" })
 [IO.File]::WriteAllText($verFile, $src, (New-Object Text.UTF8Encoding $false))
 Write-Host "Version set to $Version"
 

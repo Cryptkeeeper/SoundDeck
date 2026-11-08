@@ -105,6 +105,7 @@ namespace SoundDeck
             TickStreamMeter(showMeters);
             TickDynamicsUi(showMeters);
             TickGox();
+            TickPushToTalk();
 
             TickDucking(peak[1]);
         }
@@ -454,7 +455,6 @@ namespace SoundDeck
             Lbl(p, "Hotkey", 25, 712, 9.5f, false, Dim);
             sideHotkeyBox = HotkeyBox(p, 150, 708, "side", 3, (int)Keys.H, SideHotkeyId, RegisterSideHotkey);
             sideHotkeyStatus = Lbl(p, "Click the box, then press your keys. Backspace clears it.", 380, 712, 8.5f, false, Dim);
-            new Panel { Parent = p, Left = 0, Top = 740, Width = 10, Height = 30, BackColor = Bg }; // bottom padding when scrolling
             FillOutCombo(sideDev, "side.dev");
             RegisterSideHotkey();
         }

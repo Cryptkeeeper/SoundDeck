@@ -1,6 +1,6 @@
 {
   "Name": "SoundDeck",
-  "Version": "1.3.1.0",
+  "Version": "1.4.0.0",
   "Author": "SoundDeck",
   "Description": "Control SoundDeck's Game, Chat, Media and Aux volumes with your Stream Deck+ dials.",
   "Icon": "images/plugin",
@@ -140,6 +140,16 @@
       "Controllers": [ "Keypad" ],
       "States": [ { "Image": "images/chat_live" }, { "Image": "images/chat_muted" } ],
       "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.ptt",
+      "DisableAutomaticStates": true,
+      "Name": "Push to talk",
+      "Icon": "images/ptt_live",
+      "Tooltip": "Hold to talk. Your mic is muted until you hold this key (or unmuted until you hold it, if SoundDeck is set to push to mute).",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/ptt_idle" }, { "Image": "images/ptt_live" } ],
+      "SupportedInMultiActions": false
     },
     {
       "UUID": "com.sounddeck.controls.mix",
