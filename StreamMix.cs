@@ -20,7 +20,7 @@ namespace SoundDeck
         // the stream mix too; 0.0001 is -80 dB, so it's silent for you but still recorded at full level.
         const float SilentVolume = 0.0001f;
 
-        TrackBar[] chSVol = new TrackBar[4];
+        TrackBar[] chSVol = new Slider[4];
         Label[] chSPct = new Label[4], chYouCap = new Label[4], chStreamCap = new Label[4];
         Button[] chSMute = new Button[4];
         Panel streamCard, leaveCard;
@@ -173,7 +173,7 @@ namespace SoundDeck
             string ch = Channels[ci];
             chYouCap[ci] = Lbl(card, "YOU", 24, 92, 7.5f, true, Dim);
             chStreamCap[ci] = Lbl(card, "STREAM", 98, 92, 7.5f, true, StreamColor);
-            var tb = new TrackBar
+            var tb = new Slider
             {
                 Orientation = Orientation.Vertical, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None,
                 Left = 100, Top = 108, Height = 112, BackColor = Card, SmallChange = 2, LargeChange = 10,
@@ -220,7 +220,7 @@ namespace SoundDeck
             var note = Lbl(card, "What your stream hears. Your voice:", 14, 48, 8.5f, false, Dim);
             note.MaximumSize = new Size(156, 0);
 
-            stColVoice = new TrackBar
+            stColVoice = new Slider
             {
                 Orientation = Orientation.Vertical, Minimum = 0, Maximum = 200, TickStyle = TickStyle.None,
                 Left = 68, Top = 100, Height = 120, BackColor = Card, SmallChange = 2, LargeChange = 10,

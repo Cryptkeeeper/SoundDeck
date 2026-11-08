@@ -67,6 +67,7 @@ namespace SoundDeck
                 ok.DialogResult = DialogResult.OK;
                 f.AcceptButton = ok; f.CancelButton = ok;
                 f.ClientSize = new Size(480, ok.Bottom + 16);
+                Look.Apply(f);
                 f.ShowDialog(this);
             }
         }

@@ -34,7 +34,7 @@ namespace SoundDeck
 
         void BuildStreaming()
         {
-            var p = NewPage("Streaming", "Streaming", "For streamers. SoundDeck makes a second mic just for your stream, so Discord and your stream each get their own mix. You can mute yourself in Discord while your stream still hears you.");
+            var p = NewPage("Streaming", "Streaming", "SoundDeck makes a second mic just for your stream, so Discord and your stream each get their own mix, and you can mute yourself in Discord while your stream still hears you.");
 
             stOn = Chk(p, "Turn on streamer mode", 25, 104);
             stOn.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
@@ -60,7 +60,7 @@ namespace SoundDeck
             stObs.MaximumSize = new Size(700, 0);
 
             Lbl(p, "Your voice", 25, 258, 9.5f, false, Dim);
-            stVoice = new TrackBar { Left = 150, Top = 252, Width = 300, Minimum = 0, Maximum = 200, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("stream.voice", 100), 0, 200) };
+            stVoice = new Slider { Left = 150, Top = 252, Width = 300, Minimum = 0, Maximum = 200, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("stream.voice", 100), 0, 200) };
             p.Controls.Add(stVoice);
             stVoiceLbl = Lbl(p, "", 456, 256, 10f, true, Fg);
             stVoice.ValueChanged += (s, e) =>
@@ -72,9 +72,9 @@ namespace SoundDeck
             stBoard = Chk(p, "Soundboard on stream", 25, 306);
             stBoard.Checked = Settings.GetBool("stream.board", true);
             stBoard.CheckedChanged += (s, e) => { Settings.Set("stream.board", stBoard.Checked); ApplyStreamMix(); };
-            var tip = Lbl(p, "Your stream mic carries your voice plus the apps in your stream mix. Set that up on the Mixer page: each channel gets a STREAM fader, " +
-                "and the Stream column lists everything on stream (drag apps onto it to add them). In OBS, use only this mic for audio: " +
-                "remove Desktop Audio and your normal mic so nothing is doubled.", 25, 340, 8.5f, false, Dim);
+            var tip = Lbl(p, "Your stream mic carries your voice plus your stream mix. Set the mix on the Mixer page: each channel gets a Stream fader, " +
+                "and you can drag apps onto the Stream column. In OBS, use only this mic: " +
+                "remove Desktop Audio and your normal mic so nothing plays twice.", 25, 340, 8.5f, false, Dim);
             tip.MaximumSize = new Size(760, 0);
 
             Lbl(p, "Chat mic", 22, 420, 12f, true, Fg);
@@ -184,7 +184,7 @@ namespace SoundDeck
         void TickStreaming()
         {
             if (stStatus == null) return;
-            if (!stOn.Checked) { stStatus.Text = "Streamer mode is off. Discord gets your mic exactly as set on the Mic Mix page."; stStatus.ForeColor = Dim; return; }
+            if (!stOn.Checked) { stStatus.Text = "Streamer mode is off."; stStatus.ForeColor = Dim; return; }
             string st = !mixEngine.Running ? "Turn on Mic Mix (Mic Mix page) to use streamer mode." : mixEngine.StreamStatus;
             stStatus.Text = st == "Running" ? "Running. Your stream mic is live." : st;
             stStatus.ForeColor = st == "Running" ? Good : (st.StartsWith("Stopped") || !mixEngine.Running ? Accent : Dim);

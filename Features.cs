@@ -49,13 +49,20 @@ namespace SoundDeck
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            g.Clear(BackColor);
+            g.Clear(Look.BackOf(Parent));
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float rad = Math.Min(Width, Height) / 2f;
+            var full = new RectangleF(0, 0, Width, Height);
+            Look.FillRound(g, BackColor, full, rad);
             if (value > 0)
             {
+                using (var clip = Look.Round(full, rad))
                 using (var b = new SolidBrush(color))
                 {
-                    if (Horizontal) g.FillRectangle(b, 0, 0, (int)(Width * value), Height);
-                    else { int h = (int)(Height * value); g.FillRectangle(b, 0, Height - h, Width, h); }
+                    g.SetClip(clip);
+                    if (Horizontal) g.FillRectangle(b, 0, 0, Width * value, Height);
+                    else { float h = Height * value; g.FillRectangle(b, 0, Height - h, Width, h); }
+                    g.ResetClip();
                 }
             }
             if (marker >= 0)
@@ -142,7 +149,7 @@ namespace SoundDeck
                 LoadMicColumn();
             };
 
-            mcVol = new TrackBar
+            mcVol = new Slider
             {
                 Orientation = Orientation.Vertical, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None,
                 Left = 68, Top = 100, Height = 120, BackColor = Card, SmallChange = 2, LargeChange = 10
@@ -185,7 +192,7 @@ namespace SoundDeck
             mcNs.Checked = Settings.GetBool("ns.on", true);
             mcNs.CheckedChanged += (s, e) => { Settings.Set("ns.on", mcNs.Checked); ApplyNoiseRemoval(); };
             Lbl(card, "Strength", 14, 466, 8.5f, false, Dim);
-            mcNsStrength = new TrackBar { Left = 6, Top = 478, Width = 168, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Card, Value = Clamp(Settings.GetInt("ns.strength", 60), 0, 100) };
+            mcNsStrength = new Slider { Left = 6, Top = 478, Width = 168, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Card, Value = Clamp(Settings.GetInt("ns.strength", 60), 0, 100) };
             card.Controls.Add(mcNsStrength);
             mcNsStrength.ValueChanged += (s, e) => { Settings.Set("ns.strength", mcNsStrength.Value); ApplyNoiseRemoval(); };
             tips.SetToolTip(mcNsStrength, "Higher cuts more background sound between and around your words. Too high can clip the start of quiet words.");
@@ -197,8 +204,6 @@ namespace SoundDeck
             ApplyNoiseRemoval();
 
             // Drop an app here to put it in your chat mic (plays when music-in-mic is on).
-            var dropHint = Lbl(card, "Drop apps here to play them in your mic", 62, 14, 7.5f, false, Dim);
-            dropHint.MaximumSize = new Size(110, 0);
             tips.SetToolTip(card, "Drag an app here to play it in your mic when music-in-mic is on. Right-click an app to remove it.");
             AddAppDrop(card, exe => SetMic(exe, true), card);
         }
@@ -289,9 +294,9 @@ namespace SoundDeck
             if (noise <= 0) { mcMeter.Marker = -1; mcNoise.Text = "Listening..."; mcNoise.ForeColor = Dim; mcNoiseDb.Text = ""; mcHint.Text = ""; return; }
             float db = Db(noise);
             mcMeter.Marker = MeterPos(noise);
-            mcNoiseDb.Text = db <= -100 ? "Silent between sounds" : Math.Round(db) + " dB";
+            mcNoiseDb.Text = db <= -100 ? "" : Math.Round(db) + " dB";
             if (mcMute.Text == "Muted") { mcNoise.Text = "Muted"; mcNoise.ForeColor = Dim; mcHint.Text = ""; }
-            else if (db < -60) { mcNoise.Text = "Quiet"; mcNoise.ForeColor = Good; mcHint.Text = "Your background is nice and quiet."; }
+            else if (db < -60) { mcNoise.Text = "Quiet"; mcNoise.ForeColor = Good; mcHint.Text = ""; }
             else if (db < -45) { mcNoise.Text = "Some noise"; mcNoise.ForeColor = Warn; mcHint.Text = mcNs.Checked ? "Remove noise is cleaning this up." : "A little hum or fan noise. Turn on Remove noise below."; }
             else { mcNoise.Text = "Noisy"; mcNoise.ForeColor = Accent; mcHint.Text = mcNs.Checked ? "Remove noise is cleaning this up. Raise Strength if friends still hear it." : "Friends can hear this. Turn on Remove noise below."; }
         }
@@ -307,7 +312,7 @@ namespace SoundDeck
 
         void BuildDucking()
         {
-            var p = NewPage("Ducking", "Auto-ducking", "When someone talks in Discord (or any app in your Chat channel), SoundDeck turns your music down so you can hear them, then brings it back.");
+            var p = NewPage("Ducking", "Auto-ducking", "When someone talks in your Chat channel (Discord, etc.), SoundDeck turns other audio down so you can hear them, then brings it back.");
 
             duckOn = Chk(p, "Turn on auto-ducking", 25, 96);
             duckOn.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
@@ -329,13 +334,13 @@ namespace SoundDeck
             }
 
             Lbl(p, "How much", 25, 192, 9.5f, false, Dim);
-            duckAmount = new TrackBar { Left = 150, Top = 186, Width = 300, Minimum = 10, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("duck.amount", 60), 10, 100) };
+            duckAmount = new Slider { Left = 150, Top = 186, Width = 300, Minimum = 10, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("duck.amount", 60), 10, 100) };
             p.Controls.Add(duckAmount);
             duckAmountLbl = Lbl(p, "", 456, 190, 10f, true, Fg);
             duckAmount.ValueChanged += (s, e) => { Settings.Set("duck.amount", duckAmount.Value); UpdateDuckLabels(); };
 
             Lbl(p, "Sensitivity", 25, 236, 9.5f, false, Dim);
-            duckSens = new TrackBar { Left = 150, Top = 230, Width = 300, Minimum = 1, Maximum = 10, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("duck.sens", 6), 1, 10) };
+            duckSens = new Slider { Left = 150, Top = 230, Width = 300, Minimum = 1, Maximum = 10, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("duck.sens", 6), 1, 10) };
             p.Controls.Add(duckSens);
             duckSensLbl = Lbl(p, "", 456, 234, 10f, true, Fg);
             duckSens.ValueChanged += (s, e) => { Settings.Set("duck.sens", duckSens.Value); UpdateDuckLabels(); };
@@ -346,8 +351,8 @@ namespace SoundDeck
             p.Controls.Add(duckChatMeter);
             duckState = Lbl(p, "", 456, 320, 10f, true, Dim);
 
-            var note = Lbl(p, "Put Discord (or TeamSpeak, etc.) in the Chat channel on the Mixer page. Ducking only lowers SoundDeck's channel volume, " +
-                "so your Stream Deck dials still show your normal level.", 25, 372, 9.5f, false, Dim);
+            var note = Lbl(p, "Put Discord (or TeamSpeak, etc.) in the Chat channel on the Mixer page. " +
+                "Your Stream Deck dials keep showing your normal level while ducking.", 25, 372, 9.5f, false, Dim);
             note.MaximumSize = new Size(760, 0);
             UpdateDuckLabels();
         }
@@ -431,7 +436,7 @@ namespace SoundDeck
             sideStatus = Lbl(p, "", 160, 590, 9f, false, Dim);
 
             Lbl(p, "Level", 25, 628, 9.5f, false, Dim);
-            sideVol = new TrackBar { Left = 150, Top = 622, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("side.vol", 50), 0, 100) };
+            sideVol = new Slider { Left = 150, Top = 622, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("side.vol", 50), 0, 100) };
             p.Controls.Add(sideVol);
             sideVolLbl = Lbl(p, sideVol.Value + "%", 456, 626, 10f, true, Fg);
             sideVol.ValueChanged += (s, e) =>
@@ -633,7 +638,7 @@ namespace SoundDeck
 
         void BuildSoundboard()
         {
-            var p = NewPage("Soundboard", "Soundboard", "Click a sound to play it to your friends (through Mic Mix) and to you. Right-click a sound to change it. You can also put sounds on your Stream Deck.");
+            var p = NewPage("Soundboard", "Soundboard", "Click a sound to play it for you and your friends. Right-click to change it. Sounds work from your Stream Deck too.");
 
             for (int i = 0; i < SoundSlots; i++)
             {
@@ -656,7 +661,7 @@ namespace SoundDeck
             sbStatus = Lbl(p, "", 230, y + 8, 9.5f, false, Dim);
 
             y += 56;
-            sbFriends = Chk(p, "Play to my friends (needs Mic Mix turned on)", 25, y);
+            sbFriends = Chk(p, "Play to my friends (needs Mic Mix)", 25, y);
             sbFriends.Checked = Settings.GetBool("sb.friends", true);
             sbFriends.CheckedChanged += (s, e) => Settings.Set("sb.friends", sbFriends.Checked);
             sbMe = Chk(p, "Play to me too", 25, y + 30);
@@ -673,7 +678,7 @@ namespace SoundDeck
             };
 
             Lbl(p, "Volume", 25, y + 76, 9.5f, false, Dim);
-            sbVol = new TrackBar { Left = 150, Top = y + 70, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("sb.vol", 70), 0, 100) };
+            sbVol = new Slider { Left = 150, Top = y + 70, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("sb.vol", 70), 0, 100) };
             p.Controls.Add(sbVol);
             sbVolLbl = Lbl(p, sbVol.Value + "%", 456, y + 74, 10f, true, Fg);
             sbVol.ValueChanged += (s, e) => { sbVolLbl.Text = sbVol.Value + "%"; Settings.Set("sb.vol", sbVol.Value); };
@@ -824,7 +829,7 @@ namespace SoundDeck
 
         void BuildProfiles()
         {
-            var p = NewPage("Profiles", "Profiles", "Save your volumes, outputs, ducking and Mic Mix levels as a profile, then switch with one click, from your Stream Deck, or automatically when a game starts.");
+            var p = NewPage("Profiles", "Profiles", "Save your volumes, outputs, ducking and Mic Mix levels as a profile. Switch with one click, from your Stream Deck, or automatically when a game starts.");
 
             profList = new ListBox { Left = 25, Top = 96, Width = 300, Height = 300, BackColor = Card, ForeColor = Fg, BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 11f), IntegralHeight = false };
             p.Controls.Add(profList);
@@ -866,7 +871,7 @@ namespace SoundDeck
             };
             profAuto.SelectionChangeCommitted += (s, e) => BeginInvoke(new Action(SaveAutoField));
             profAuto.Leave += (s, e) => SaveAutoField();
-            Lbl(p, "Pick an app that's playing sound, or type its .exe name (like wardogsclient-win64-shipping).", 175, 544, 8.5f, false, Dim);
+            Lbl(p, "Pick an app that's playing sound, or type its .exe name (like cs2).", 175, 544, 8.5f, false, Dim);
 
             FillProfileList();
         }
@@ -1080,6 +1085,7 @@ namespace SoundDeck
                 var ok = Btn(f, "OK", 196, 84, 80, 30); ok.DialogResult = DialogResult.OK;
                 var cancel = Btn(f, "Cancel", 282, 84, 80, 30); cancel.DialogResult = DialogResult.Cancel;
                 f.AcceptButton = ok; f.CancelButton = cancel;
+                Look.Apply(f);
                 return f.ShowDialog(this) == DialogResult.OK ? tb.Text : null;
             }
         }

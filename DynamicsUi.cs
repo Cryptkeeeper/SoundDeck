@@ -16,7 +16,7 @@ namespace SoundDeck
         {
             var p = pages["Equalizer"];
             Lbl(p, "Gate & compressor", 22, 540, 12f, true, Fg);
-            var note = Lbl(p, "For your mic. Built into SoundDeck, so they work without Equalizer APO. They run right after Remove noise, on the mic your friends and your stream hear, and on Hear yourself. They need Mic Mix turned on.", 25, 568, 9f, false, Dim);
+            var note = Lbl(p, "For your mic: evens out your volume and silences it between words. Applies to what friends and your stream hear. Needs Mic Mix on.", 25, 568, 9f, false, Dim);
             note.MaximumSize = new Size(760, 0);
 
             gateOn = Chk(p, "Noise gate", 25, 606);
@@ -47,7 +47,7 @@ namespace SoundDeck
         TrackBar SliderRow(Panel p, string label, int y, int min, int max, string key, int def, Func<int, string> fmt)
         {
             Lbl(p, label, 45, y + 4, 9.5f, false, Dim);
-            var tb = new TrackBar { Left = 150, Top = y - 2, Width = 300, Minimum = min, Maximum = max, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt(key, def), min, max) };
+            var tb = new Slider { Left = 150, Top = y - 2, Width = 300, Minimum = min, Maximum = max, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt(key, def), min, max) };
             p.Controls.Add(tb);
             var val = Lbl(p, fmt(tb.Value), 456, y + 2, 10f, true, Fg);
             tb.ValueChanged += (s, e) => { val.Text = fmt(tb.Value); Settings.Set(key, tb.Value); ApplyDynamics(); };

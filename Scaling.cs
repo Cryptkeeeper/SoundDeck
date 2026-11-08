@@ -63,6 +63,7 @@ namespace SoundDeck
             float ax = Math.Max(s, Math.Min(sx, s * 1.35f)), ay = Math.Max(s, Math.Min(sy, s * 1.35f));
             if (Math.Abs(s - uiScale) < 0.01f && Math.Abs(ax - scaleX) < 0.01f && Math.Abs(ay - scaleY) < 0.01f) return;
             uiScale = s; scaleX = ax; scaleY = ay;
+            Look.Scale = s;
             SuspendLayout();
             Font = ScaledFont(baseFormFont);
             ScaleTree(this);

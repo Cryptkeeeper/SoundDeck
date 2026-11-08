@@ -229,7 +229,11 @@ namespace SoundDeck
             string name = k == null ? "" : Settings.Get(k, "");
             hpDetected = null;
             if (name == "" && k != null) hpDetected = DetectHeadphones();
-            if (name != "") { hpName.Text = "Tuned for " + name; hpName.ForeColor = Good; hpRemove.Text = "Remove"; }
+            // The saved name ends with the measurement source ("Model (Source)"); the label shows just the model.
+            int src = name.EndsWith(")") ? name.LastIndexOf(" (") : -1;
+            string shortName = src > 0 ? name.Substring(0, src) : name;
+            tips.SetToolTip(hpName, name);
+            if (name != "") { hpName.Text = "Tuned for " + shortName; hpName.ForeColor = Good; hpRemove.Text = "Remove"; }
             else if (hpDetected != null) { hpName.Text = "Detected " + hpDetected.Name; hpName.ForeColor = Fg; hpRemove.Text = "Use it"; }
             else { hpName.Text = "No headphone tuning"; hpName.ForeColor = Dim; }
             hpRemove.Visible = name != "" || hpDetected != null;
@@ -310,6 +314,7 @@ namespace SoundDeck
             var guess = hpIndex == null || dev == null ? null : AutoEq.Detect(dev.Name, hpIndex);
             using (var dlg = new HeadphonePicker(guess == null ? "" : guess.Name))
             {
+                Look.Apply(dlg);
                 if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Filters == null) return;
                 ApplyHeadphones(dlg.Picked, dlg.Filters);
             }

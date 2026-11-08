@@ -564,7 +564,7 @@ namespace SoundDeck
 
         // Mixer
         ComboBox[] chDevice = new ComboBox[4];
-        TrackBar[] chVol = new TrackBar[4];
+        TrackBar[] chVol = new Slider[4];
         Label[] chPct = new Label[4];
         Button[] chMute = new Button[4];
         string appsKey = null;
@@ -574,7 +574,7 @@ namespace SoundDeck
         // EQ
         ComboBox eqDevice, eqPreset;
         CheckBox eqOn;
-        TrackBar[] eqBands = new TrackBar[10];
+        TrackBar[] eqBands = new Slider[10];
         Label[] eqVals = new Label[10];
         Label eqStatus, micStatus;
 
@@ -651,6 +651,7 @@ namespace SoundDeck
             fast = new Timer { Interval = 50 };
             fast.Tick += (s, e) => OnFastTick();
             fast.Start();
+            Look.Apply(this);
             InitScaling();
             CheckWhatsNew();
             if (StreamerOn)
@@ -714,6 +715,7 @@ namespace SoundDeck
         {
             var nav = new Panel { Dock = DockStyle.Left, Width = 180, BackColor = Card };
             navPanel = nav;
+            Look.NavPanel = nav;
             content = new Panel { Dock = DockStyle.Fill, BackColor = Bg };
             Controls.Add(nav);
             Controls.Add(content);
@@ -772,7 +774,7 @@ namespace SoundDeck
 
         void BuildMixer()
         {
-            var p = NewPage("Mixer", "Mixer", "Drag apps between channels. Each channel has its own volume and output device. Right-click an app for more options.");
+            var p = NewPage("Mixer", "Mixer", "Drag apps between channels, or onto Mic to play them in your mic. Right-click an app for more options.");
             for (int i = 0; i < 4; i++)
             {
                 int ci = i;
@@ -794,7 +796,7 @@ namespace SoundDeck
                 };
                 chDevice[i] = cb;
 
-                var tb = new TrackBar
+                var tb = new Slider
                 {
                     Orientation = Orientation.Vertical, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None,
                     Left = 68, Top = 100, Height = 120, BackColor = Card, SmallChange = 2, LargeChange = 10,
@@ -838,7 +840,7 @@ namespace SoundDeck
             p.Controls.Add(leave);
             leave.Controls.Add(new Panel { Left = 0, Top = 0, Width = 180, Height = 4, BackColor = Dim });
             Lbl(leave, "Leave alone", 12, 14, 14f, true, Dim);
-            var leaveNote = Lbl(leave, "SoundDeck won't change the volume or output of apps you drop here.", 14, 48, 8.5f, false, Dim);
+            var leaveNote = Lbl(leave, "Apps here keep their own volume and output.", 14, 48, 8.5f, false, Dim);
             leaveNote.MaximumSize = new Size(156, 0);
             var leaveZone = NewZone(leave, 112, 470);
             zones["None"] = leaveZone;
@@ -907,7 +909,15 @@ namespace SoundDeck
             if (inMic || live) chip.Padding = new Padding(10, 0, (inMic ? 30 : 0) + (live ? 32 : 0) + 4, 0);
             chip.Paint += (s, e) =>
             {
-                using (var b = new SolidBrush(stripe)) e.Graphics.FillRectangle(b, 0, 0, 4, chip.Height);
+                // Drawn as a rounded pill with a coloured dot instead of a square block with a side bar.
+                var g = e.Graphics;
+                g.Clear(Look.BackOf(chip.Parent));
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                Look.FillRound(g, chip.BackColor, new RectangleF(0, 0, chip.Width, chip.Height), Look.R(7));
+                float d = Math.Max(6, chip.Height / 4.5f);
+                using (var b = new SolidBrush(stripe)) g.FillEllipse(b, chip.Height * 0.32f - d / 2, (chip.Height - d) / 2f, d, d);
+                var tr = new Rectangle(chip.Padding.Left + (int)(chip.Height * 0.25f), 0, chip.Width - chip.Padding.Left - (int)(chip.Height * 0.25f) - chip.Padding.Right, chip.Height);
+                TextRenderer.DrawText(g, chip.Text, chip.Font, tr, chip.ForeColor, TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
                 int x = chip.Width - 4;
                 if (live) { x -= 30; ChipTag(e.Graphics, "LIVE", StreamColor, x, chip.Height); x -= 2; }
                 if (inMic) { x -= 28; ChipTag(e.Graphics, "MIC", MicColor, x, chip.Height); }
@@ -1136,7 +1146,7 @@ namespace SoundDeck
 
         void BuildEq()
         {
-            var p = NewPage("Equalizer", "Equalizer", "Each output device gets its own EQ. Your Arctis Game and Chat devices can have different settings.");
+            var p = NewPage("Equalizer", "Equalizer", "Each output device has its own EQ, so game and chat audio can sound different.");
             eqStatus = ApoStatus(p, 84);
 
             Lbl(p, "Device", 25, 134, 9.5f, false, Dim);
@@ -1179,7 +1189,7 @@ namespace SoundDeck
                 var val = Lbl(card, "0 dB", 0, 10, 9f, true, Fg);
                 val.AutoSize = false; val.Width = 72; val.TextAlign = ContentAlignment.MiddleCenter;
                 eqVals[i] = val;
-                var tb = new TrackBar
+                var tb = new Slider
                 {
                     Orientation = Orientation.Vertical, Minimum = -12, Maximum = 12, TickStyle = TickStyle.Both, TickFrequency = 3,
                     Left = 12, Top = 36, Height = 220, BackColor = Card, SmallChange = 1, LargeChange = 3
@@ -1250,7 +1260,7 @@ namespace SoundDeck
             };
 
             Lbl(p, "Mic level", 25, 178, 9.5f, false, Dim);
-            micLevel = new TrackBar { Left = 96, Top = 172, Width = 340, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg };
+            micLevel = new Slider { Left = 96, Top = 172, Width = 340, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg };
             p.Controls.Add(micLevel);
             micLevelLbl = Lbl(p, "", 444, 176, 10f, true, Fg);
             micLevel.ValueChanged += (s, e) =>
@@ -1264,15 +1274,15 @@ namespace SoundDeck
             Lbl(p, "Voice processing", 22, 226, 12f, true, Fg);
             micOn = Chk(p, "Turn on voice processing for this mic", 25, 258);
             micHp = Chk(p, "Remove low rumble (desk bumps, fans, AC hum)", 45, 288);
-            micClarity = Chk(p, "Voice clarity boost (helps you cut through in game)", 45, 318);
+            micClarity = Chk(p, "Clarity boost (helps you cut through in game)", 45, 318);
             micHarsh = Chk(p, "Soften harsh \"s\" sounds", 45, 348);
             Lbl(p, "Extra boost", 45, 386, 9.5f, false, Dim);
-            micGain = new TrackBar { Left = 130, Top = 380, Width = 240, Minimum = 0, Maximum = 12, TickStyle = TickStyle.None, BackColor = Bg };
+            micGain = new Slider { Left = 130, Top = 380, Width = 240, Minimum = 0, Maximum = 12, TickStyle = TickStyle.None, BackColor = Bg };
             p.Controls.Add(micGain);
             micGainLbl = Lbl(p, "", 378, 384, 10f, true, Fg);
 
-            micNs = Chk(p, "Noise suppression (removes keyboard, fans, background noise)", 45, 426);
-            var nsNote = Lbl(p, "Only for Equalizer APO. You don't need this: \"Remove noise\" in the Mic column on the Mixer page does it without installing anything.", 65, 454, 9f, false, Dim);
+            micNs = Chk(p, "Noise suppression plugin (older option)", 45, 426);
+            var nsNote = Lbl(p, "Not needed: Remove noise in the Mic column on the Mixer page does this with nothing to install.", 65, 454, 9f, false, Dim);
             nsNote.MaximumSize = new Size(700, 0);
             micNsPath = new TextBox { Left = 65, Top = 480, Width = 430, BackColor = Card2, ForeColor = Fg, BorderStyle = BorderStyle.FixedSingle, ReadOnly = true };
             p.Controls.Add(micNsPath);
@@ -1391,7 +1401,7 @@ namespace SoundDeck
             {
                 l.ForeColor = ok ? Good : Accent;
                 l.Text = ok
-                    ? "Equalizer APO is installed. If a device has no effect, open the Equalizer APO Configurator, tick that device, and restart."
+                    ? "Equalizer APO is ready. No effect on a device? Tick it in the Equalizer APO Configurator, then restart."
                     : "This needs Equalizer APO (free, open source, no ads). Click the button to install it; Windows asks permission once, then tick your headset and mic and restart.";
                 ((Control)l.Tag).Visible = !ok;
                 ((Control)l.Tag).Enabled = !apoInstalling;
@@ -1454,7 +1464,7 @@ namespace SoundDeck
 
         void BuildMicMix()
         {
-            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Discord hear them. Press your hotkey to turn the music on and off. Your voice always goes through.");
+            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Discord hear them. Your hotkey turns the music on and off; your voice always goes through.");
 
             mixCableStatus = Lbl(p, "", 25, 92, 9.5f, false, Fg);
             mixCableStatus.MaximumSize = new Size(560, 0);
@@ -1508,19 +1518,19 @@ namespace SoundDeck
             mixAppsLbl.MaximumSize = new Size(800, 0);
 
             Lbl(p, "Music volume", 25, 344, 9.5f, false, Dim);
-            mixMediaVol = new TrackBar { Left = 150, Top = 338, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Math.Max(0, Math.Min(100, Settings.GetInt("mix.mediaVol", 35))) };
+            mixMediaVol = new Slider { Left = 150, Top = 338, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Math.Max(0, Math.Min(100, Settings.GetInt("mix.mediaVol", 35))) };
             p.Controls.Add(mixMediaVol);
             mixMediaLbl = Lbl(p, "", 456, 342, 10f, true, Fg);
             mixMediaVol.ValueChanged += (s, e) => { Settings.Set("mix.mediaVol", mixMediaVol.Value); UpdateMixGains(); };
 
             Lbl(p, "Your voice", 25, 388, 9.5f, false, Dim);
-            mixMicVol = new TrackBar { Left = 150, Top = 382, Width = 300, Minimum = 0, Maximum = 200, TickStyle = TickStyle.None, BackColor = Bg, Value = Math.Max(0, Math.Min(200, Settings.GetInt("mix.micVol", 100))) };
+            mixMicVol = new Slider { Left = 150, Top = 382, Width = 300, Minimum = 0, Maximum = 200, TickStyle = TickStyle.None, BackColor = Bg, Value = Math.Max(0, Math.Min(200, Settings.GetInt("mix.micVol", 100))) };
             p.Controls.Add(mixMicVol);
             mixMicLbl = Lbl(p, "", 456, 386, 10f, true, Fg);
             mixMicVol.ValueChanged += (s, e) => { Settings.Set("mix.micVol", mixMicVol.Value); UpdateMixGains(); };
-            Lbl(p, "These set how loud things sound to your friends, not to you.", 155, 428, 8.5f, false, Dim);
+            Lbl(p, "These only change what your friends hear.", 155, 428, 8.5f, false, Dim);
 
-            mixBeep = Chk(p, "Play a short beep when the hotkey turns music on or off", 25, 446);
+            mixBeep = Chk(p, "Beep when the hotkey turns music on or off", 25, 446);
             mixBeep.Checked = Settings.GetBool("mix.beep", true);
             mixBeep.CheckedChanged += (s, e) => Settings.Set("mix.beep", mixBeep.Checked);
 
@@ -1674,8 +1684,8 @@ namespace SoundDeck
             UpdateEngineSources();
             var micApps = lastSessions.Where(s => InMic(s.Exe)).Select(s => s.Pretty).Distinct().ToList();
             mixAppsLbl.Text = micApps.Count == 0
-                ? "No apps are in your mic yet. On the Mixer page, drag an app onto the Mic column (or right-click it > Play in my mic)."
-                : "In your mic: " + string.Join(", ", micApps) + ". Change this on the Mixer page (drag onto Mic, or right-click an app).";
+                ? "No apps in your mic yet. On the Mixer page, drag an app onto Mic, or right-click it > Play in my mic."
+                : "In your mic: " + string.Join(", ", micApps) + ". Change this on the Mixer page.";
 
             if (mixOn.Checked && cable != null && !badMic)
             {
@@ -1726,20 +1736,20 @@ namespace SoundDeck
 
         void BuildSettings()
         {
-            var p = NewPage("Settings", "Settings", "SoundDeck uses almost no memory and nothing runs in the background except this app.");
+            var p = NewPage("Settings", "Settings", "How SoundDeck starts, updates, and which devices it shows.");
             var startup = Chk(p, "Start SoundDeck when Windows starts", 25, 96);
             startup.Checked = IsStartupOn();
             startup.CheckedChanged += (s, e) => SetStartup(startup.Checked);
 
-            var startMin = Chk(p, "When starting with Windows, start hidden in the tray", 25, 126);
+            var startMin = Chk(p, "Start hidden in the tray", 25, 126);
             startMin.Checked = Settings.GetBool("startHidden", true);
             startMin.CheckedChanged += (s, e) => Settings.Set("startHidden", startMin.Checked);
 
-            var closeTray = Chk(p, "Closing the window keeps SoundDeck running in the tray", 25, 156);
+            var closeTray = Chk(p, "Keep running in the tray when I close the window", 25, 156);
             closeTray.Checked = Settings.GetBool("closeToTray", true);
             closeTray.CheckedChanged += (s, e) => Settings.Set("closeToTray", closeTray.Checked);
 
-            Lbl(p, "Undo", 22, 204, 12f, true, Fg);
+            Lbl(p, "Reset", 22, 204, 12f, true, Fg);
             var reset = Btn(p, "Reset every app's output to default", 25, 236, 280, 32);
             reset.Click += (s, e) =>
             {
@@ -1752,13 +1762,13 @@ namespace SoundDeck
             };
 
             Lbl(p, "Replacing Sonar", 22, 294, 12f, true, Fg);
-            var sonar = Lbl(p, "Once you're happy with SoundDeck, uninstall SteelSeries GG from Settings > Apps. That removes the Sonar virtual devices too, " +
-                "so after uninstalling, pick your Arctis devices again in each Mixer channel.", 25, 324, 9.5f, false, Dim);
+            var sonar = Lbl(p, "Happy with SoundDeck? Uninstall SteelSeries GG in Windows Settings > Apps. That also removes Sonar's virtual devices, " +
+                "so pick your headset again in each Mixer channel afterwards.", 25, 324, 9.5f, false, Dim);
             sonar.MaximumSize = new Size(540, 0);
 
             Lbl(p, "Outputs", 22, 384, 12f, true, Fg);
-            var outNote = Lbl(p, "Untick devices you don't use. They're hidden from the Mixer and your Stream Deck output buttons. " +
-                "Windows still has them, and nothing that's already using one gets moved off it.", 25, 414, 9.5f, false, Dim);
+            var outNote = Lbl(p, "Untick devices you don't use to hide them from the Mixer and Stream Deck. " +
+                "Windows keeps them, and nothing already using one is moved.", 25, 414, 9.5f, false, Dim);
             outNote.MaximumSize = new Size(540, 0);
             outputsPanel = new FlowLayoutPanel { Left = 25, Top = 460, Width = 780, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Color.Transparent, Padding = new Padding(0, 0, 0, 20) };
             p.Controls.Add(outputsPanel);
