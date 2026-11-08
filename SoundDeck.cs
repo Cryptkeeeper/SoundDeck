@@ -626,6 +626,8 @@ namespace SoundDeck
             BuildDynamicsUi();
             BuildUpdates(pages["Settings"]);
             BuildGoXlr(pages["Settings"]);
+            BuildGoxLinkUi(pages["Settings"]);
+            StartGoxPolling();
 
             RefreshDevices(true);
             LoadEqDevice();
@@ -806,6 +808,7 @@ namespace SoundDeck
                 {
                     chPct[ci].Text = chVol[ci].Value + "%";
                     Settings.Set("ch." + Channels[ci] + ".vol", chVol[ci].Value);
+                    GoxOnChannelVolume(ci);
                     ApplyMixer();
                     PublishChannel(ci);
                 };
@@ -923,6 +926,7 @@ namespace SoundDeck
             string k = "ch." + Channels[ci] + ".mute";
             Settings.Set(k, !Settings.GetBool(k, false));
             UpdateMuteButton(ci);
+            GoxOnChannelMute(ci);
             ApplyMixer();
         }
 
@@ -1094,12 +1098,9 @@ namespace SoundDeck
                 string ch = ChannelFor(s.Exe);
                 int ci = Array.IndexOf(Channels, ch);
                 if (ci < 0) continue;
-                float vol = chVol[ci].Value / 100f * duck[ci];
-                // Mute = volume 0, not a real mute: the stream mix records apps before their volume,
-                // so muting a channel for yourself doesn't cut it from your stream.
-                // Exactly 0 makes Windows send silence (to the stream too), so "off" is 0.01% (-80 dB, inaudible).
-                if (Settings.GetBool("ch." + ch + ".mute", false)) vol = 0f;
-                vol = Math.Max(vol, SilentVolume);
+                // Mute = a tiny volume, not a real mute (a real mute or exactly 0 makes Windows send silence,
+                // which the stream mix would record too). Channels controlled by a GoXLR stay at full here.
+                float vol = PersonalVolume(ci);
                 try
                 {
                     float cur; s.Volume.GetMasterVolume(out cur);

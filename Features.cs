@@ -104,6 +104,7 @@ namespace SoundDeck
             TickMicColumn(showMeters);
             TickStreamMeter(showMeters);
             TickDynamicsUi(showMeters);
+            TickGox();
 
             TickDucking(peak[1]);
         }
@@ -153,7 +154,8 @@ namespace SoundDeck
             mcVol.ValueChanged += (s, e) =>
             {
                 mcPct.Text = mcVol.Value + "%";
-                if (loading) return;
+                if (loading || goxApplying) return;
+                if (GoxOnMicLevel(mcVol.Value)) return; // GoXLR mic: this slider is its mic gain
                 var mic = micDevice.SelectedItem as DeviceItem;
                 if (mic == null) return;
                 Audio.SetVolume(mic.Id, mcVol.Value / 100f);
@@ -163,6 +165,7 @@ namespace SoundDeck
             mcMute = Btn(card, "Mute", 12, 250, 156, 28);
             mcMute.Click += (s, e) =>
             {
+                if (GoxOnMicMute()) { ShowMicMuteLook(gox != null && gox.CoughState != "Unmuted"); return; } // GoXLR mute button
                 var mic = micDevice.SelectedItem as DeviceItem;
                 if (mic == null) return;
                 Audio.SetMute(mic.Id, !Audio.GetMute(mic.Id));
@@ -253,12 +256,13 @@ namespace SoundDeck
             loading = true;
             for (int i = 0; i < mcDev.Items.Count; i++)
                 if (((DeviceItem)mcDev.Items[i]).Id == mic.Id && mcDev.SelectedIndex != i) mcDev.SelectedIndex = i;
-            float v = Audio.GetVolume(mic.Id);
-            if (v >= 0) mcVol.Value = Clamp((int)Math.Round(v * 100), 0, 100);
-            mcPct.Text = mcVol.Value + "%";
-            bool m = Audio.GetMute(mic.Id);
-            mcMute.Text = m ? "Muted" : "Mute";
-            mcMute.BackColor = m ? Color.FromArgb(150, 45, 45) : Card2;
+            if (!(GoxLinkOn && MicIsGoxlr())) // with a linked GoXLR, its mic gain and mute button drive these instead
+            {
+                float v = Audio.GetVolume(mic.Id);
+                if (v >= 0) mcVol.Value = Clamp((int)Math.Round(v * 100), 0, 100);
+                mcPct.Text = mcVol.Value + "%";
+                ShowMicMuteLook(Audio.GetMute(mic.Id));
+            }
             loading = prev;
         }
 
@@ -389,7 +393,7 @@ namespace SoundDeck
             {
                 int ci = Array.IndexOf(Channels, ChannelFor(s.Exe));
                 if (ci < 0) continue;
-                float vol = Math.Max(SilentVolume, Settings.GetBool("ch." + Channels[ci] + ".mute", false) ? 0f : chVol[ci].Value / 100f * duck[ci]);
+                float vol = PersonalVolume(ci);
                 try
                 {
                     float cur; s.Volume.GetMasterVolume(out cur);

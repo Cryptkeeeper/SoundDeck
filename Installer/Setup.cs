@@ -58,7 +58,7 @@ namespace SoundDeckSetup
     {
         public string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "SoundDeck");
         public bool Uninstall, Quiet, NoLaunch;
-        public bool Noise = true, Apo = true, VbCable = true, StreamDeck = true, Desktop = true, Startup = true, StartMenu = true;
+        public bool Noise = true, Apo = true, GoxUtil = true, VbCable = true, StreamDeck = true, Desktop = true, Startup = true, StartMenu = true;
 
         public Options(string[] args)
         {
@@ -73,6 +73,7 @@ namespace SoundDeckSetup
                 else if (l == "/no-shortcuts") { Desktop = false; StartMenu = false; }
                 else if (l == "/no-noise") Noise = false;
                 else if (l == "/no-apo") Apo = false;
+                else if (l == "/no-goxlr") GoxUtil = false;
                 else if (l == "/no-launch") NoLaunch = true;
                 else if (l.StartsWith("/dir:")) Dir = a.Substring(5).Trim('"');
             }
@@ -180,6 +181,15 @@ namespace SoundDeckSetup
             return File.Exists(Path.Combine(p, "EqualizerAPO.dll")) ? p : null;
         }
 
+        public static bool GoxUtilityInstalled()
+        {
+            foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) })
+            {
+                try { if (Directory.Exists(root) && Directory.GetDirectories(root, "GoXLR Utility*").Length > 0) return true; } catch { }
+            }
+            return Process.GetProcessesByName("goxlr-daemon").Length > 0;
+        }
+
         public static string StreamDeckExe()
         {
             string p = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Elgato\StreamDeck\StreamDeck.exe");
@@ -196,6 +206,9 @@ namespace SoundDeckSetup
         // Equalizer APO is unsigned; this hash matches the one Chocolatey publishes for the same file.
         const string ApoUrl = "https://downloads.sourceforge.net/project/equalizerapo/1.4.2/EqualizerAPO-x64-1.4.2.exe";
         const string ApoSha = "7403BE7427BBE1936A40DDED082829B6E217FC4F5990FEE5CBA501F0AE055AFA";
+        // GoXLR Utility (open source); hash is the SHA-256 GitHub publishes for this release file.
+        const string GoxUrl = "https://github.com/GoXLR-on-Linux/goxlr-utility/releases/download/v1.2.4/goxlr-utility-1.2.4.exe";
+        const string GoxSha = "0A8743D27EA5D1741956AECFC3AE26C0F7399945CF29D2BB6B3DAB459E86AC2F";
         const string VbCableUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip";
         const string VbCableSha = "BC44E8974191A5A2427D6C979E2DAB08DBB09925F3F435DFA2F0BA3E45B6EB90";
         public const string PluginId = "com.sounddeck.controls.sdPlugin";
@@ -276,6 +289,22 @@ namespace SoundDeckSetup
                 }
                 catch (System.ComponentModel.Win32Exception) { Warnings.Add("Equalizer APO wasn't installed because Windows permission was declined. Run SoundDeckSetup.exe again anytime."); }
                 catch (Exception ex) { Warnings.Add("Equalizer APO wasn't installed: " + ex.Message); }
+            }
+
+            bool goxPresent = Detect.Mics().Any(m => m.IndexOf("GoXLR", StringComparison.OrdinalIgnoreCase) >= 0 || m.IndexOf("GO XLR", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (o.GoxUtil && goxPresent && !Detect.GoxUtilityInstalled())
+            {
+                try
+                {
+                    var exe = Download(GoxUrl, GoxSha, "GoXLR Utility", 72, 80);
+                    string tmp = Path.Combine(Path.GetTempPath(), "goxlr-utility-1.2.4.exe");
+                    File.WriteAllBytes(tmp, exe);
+                    report(80, "Opening the GoXLR Utility installer. Follow its steps...");
+                    Process.Start(new ProcessStartInfo(tmp) { UseShellExecute = true }).WaitForExit();
+                    try { File.Delete(tmp); } catch { }
+                }
+                catch (System.ComponentModel.Win32Exception) { Warnings.Add("GoXLR Utility wasn't installed because Windows permission was declined."); }
+                catch (Exception ex) { Warnings.Add("GoXLR Utility wasn't installed: " + ex.Message); }
             }
 
             if (o.VbCable && Detect.VirtualMic() == null)
@@ -416,7 +445,7 @@ namespace SoundDeckSetup
     class SetupForm : Form
     {
         readonly Options o;
-        CheckBox noise, apo, vb, sd, desk, start;
+        CheckBox noise, apo, gx, vb, sd, desk, start;
         Button go, cancel;
         ProgressBar bar;
         Label status, title, sub;
@@ -426,7 +455,7 @@ namespace SoundDeckSetup
         {
             this.o = o;
             Text = "SoundDeck Setup";
-            ClientSize = new Size(580, 616);
+            ClientSize = new Size(580, 678);
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             Ui.Dark(this);
@@ -435,7 +464,7 @@ namespace SoundDeckSetup
             sub = Ui.Lbl(this, "A lightweight sound mixer: per-app volume and outputs, music in your mic, soundboard, noise removal. No ads, no account.", 30, 62, 9.5f, false, Ui.Dim);
             sub.MaximumSize = new Size(520, 0);
 
-            choices = new Panel { Left = 28, Top = 112, Width = 524, Height = 396, BackColor = Ui.Card };
+            choices = new Panel { Left = 28, Top = 112, Width = 524, Height = 458, BackColor = Ui.Card };
             Controls.Add(choices);
 
             noise = Ui.Chk(choices, "Noise removal", "Downloads RNNoise (36 MB) from its official GitHub page. Removes fans, keyboard and background noise from your mic.", 16, 14);
@@ -453,27 +482,34 @@ namespace SoundDeckSetup
                 : "Needed to send music, sounds and the cleaned-up mic to Discord and games. Downloads 1 MB from vb-audio.com. Windows asks permission, then click \"Install Driver\". Restart after.", 16, 172);
             vb.Checked = vm == null; vb.Enabled = vm == null;
 
+            bool hasGox = Detect.Mics().Any(m => m.IndexOf("GoXLR", StringComparison.OrdinalIgnoreCase) >= 0 || m.IndexOf("GO XLR", StringComparison.OrdinalIgnoreCase) >= 0);
+            bool hasUtil = Detect.GoxUtilityInstalled();
+            gx = Ui.Chk(choices, "GoXLR control (GoXLR Utility)", !hasGox ? "No GoXLR found, so this is skipped."
+                : hasUtil ? "Not needed: GoXLR Utility is already installed."
+                : "Lets SoundDeck control the GoXLR's faders, mutes, mic and colours. Downloads the free, open-source GoXLR Utility (44 MB). Close TC-Helicon's GoXLR App first; only one can run.", 16, 256);
+            gx.Checked = hasGox && !hasUtil; gx.Enabled = hasGox && !hasUtil;
+
             bool hasSd = Detect.StreamDeckExe() != null;
-            sd = Ui.Chk(choices, "Stream Deck plugin", hasSd ? "Dials for each channel plus output, sound and profile keys. The Stream Deck app restarts once." : "Stream Deck app not found, so this is skipped.", 16, 256);
+            sd = Ui.Chk(choices, "Stream Deck plugin", hasSd ? "Dials for each channel plus output, sound and profile keys. The Stream Deck app restarts once." : "Stream Deck app not found, so this is skipped.", 16, 318);
             sd.Checked = hasSd; sd.Enabled = hasSd;
 
-            desk = Ui.Chk(choices, "Desktop shortcut", null, 16, 318); desk.Checked = true;
-            start = Ui.Chk(choices, "Start SoundDeck with Windows (hidden in the tray)", null, 16, 352); start.Checked = true;
+            desk = Ui.Chk(choices, "Desktop shortcut", null, 16, 380); desk.Checked = true;
+            start = Ui.Chk(choices, "Start SoundDeck with Windows (hidden in the tray)", null, 16, 414); start.Checked = true;
 
-            bar = new ProgressBar { Left = 28, Top = 522, Width = 524, Height = 8, Visible = false };
+            bar = new ProgressBar { Left = 28, Top = 584, Width = 524, Height = 8, Visible = false };
             Controls.Add(bar);
-            status = Ui.Lbl(this, "Installs to " + o.Dir, 28, 538, 8.5f, false, Ui.Dim);
+            status = Ui.Lbl(this, "Installs to " + o.Dir, 28, 600, 8.5f, false, Ui.Dim);
             status.MaximumSize = new Size(524, 0);
 
-            go = Ui.Btn(this, "Install", 412, 566, 140, 36, true);
-            cancel = Ui.Btn(this, "Cancel", 262, 566, 140, 36, false);
+            go = Ui.Btn(this, "Install", 412, 628, 140, 36, true);
+            cancel = Ui.Btn(this, "Cancel", 262, 628, 140, 36, false);
             go.Click += (s, e) => Start();
             cancel.Click += (s, e) => Close();
         }
 
         void Start()
         {
-            o.Noise = noise.Checked; o.Apo = apo.Checked; o.VbCable = vb.Checked; o.StreamDeck = sd.Checked; o.Desktop = desk.Checked; o.Startup = start.Checked;
+            o.Noise = noise.Checked; o.Apo = apo.Checked; o.GoxUtil = gx.Checked; o.VbCable = vb.Checked; o.StreamDeck = sd.Checked; o.Desktop = desk.Checked; o.Startup = start.Checked;
             choices.Enabled = false; go.Enabled = false; cancel.Enabled = false;
             bar.Visible = true;
             title.Text = "Installing...";
