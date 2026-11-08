@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; padding: 10px 14px; background: #2D2D2D; color: #D8D8D8; font: 9pt "Segoe UI", sans-serif; }
+  .row { display: flex; align-items: center; margin: 0 0 10px; }
+  .row label { width: 92px; flex: none; color: #969696; }
+  select { flex: 1; min-width: 0; background: #3D3D3D; color: #D8D8D8; border: 0; border-radius: 3px; padding: 5px 6px; font: inherit; }
+  .note { color: #969696; margin: 2px 0 10px 92px; line-height: 1.4; }
+  .off { color: #E7A23E; }
+</style>
+</head>
+<body>
+  <div class="row"><label id="label" for="item">Sound</label><select id="item"></select></div>
+  <div id="note" class="note"></div>
+
+<script>
+  var ws, uuid, action, settings = {}, items = [], online = true, label = "Sound";
+  var $ = function (id) { return document.getElementById(id); };
+
+  function connectElgatoStreamDeckSocket(port, inUUID, registerEvent, info, actionInfo) {
+    uuid = inUUID;
+    var ai = JSON.parse(actionInfo);
+    action = ai.action;
+    settings = (ai.payload && ai.payload.settings) || {};
+    if (/profile$/.test(action)) label = "Profile";
+    ws = new WebSocket("ws://127.0.0.1:" + port);
+    ws.onopen = function () {
+      ws.send(JSON.stringify({ event: registerEvent, uuid: uuid }));
+      ws.send(JSON.stringify({ event: "sendToPlugin", action: action, context: uuid, payload: { request: "list" } }));
+    };
+    ws.onmessage = function (e) {
+      var m = JSON.parse(e.data);
+      if (m.event === "sendToPropertyInspector" && m.payload) {
+        items = m.payload.items || [];
+        online = m.payload.online !== false;
+        label = m.payload.label || label;
+        render();
+      } else if (m.event === "didReceiveSettings" && m.payload) {
+        settings = m.payload.settings || {};
+        render();
+      }
+    };
+    render();
+  }
+
+  function render() {
+    $("label").textContent = label;
+    var sel = $("item");
+    sel.innerHTML = "";
+    var blank = document.createElement("option");
+    blank.value = ""; blank.textContent = "Pick one...";
+    sel.appendChild(blank);
+    var found = false;
+    items.forEach(function (it) {
+      var o = document.createElement("option");
+      o.value = it.id; o.textContent = it.name;
+      if (it.id === settings.item) { o.selected = true; found = true; }
+      sel.appendChild(o);
+    });
+    if (settings.item && !found) {
+      var o = document.createElement("option");
+      o.value = settings.item; o.textContent = settings.item + " (not found)"; o.selected = true;
+      sel.appendChild(o);
+    }
+    var note = $("note");
+    if (!online) { note.className = "note off"; note.textContent = "Start SoundDeck to see the list."; }
+    else if (items.length === 0) { note.className = "note"; note.textContent = label === "Profile" ? "Make a profile on SoundDeck's Profiles page first." : ""; }
+    else { note.className = "note"; note.textContent = label === "Profile" ? "Press the key to switch to this profile. It lights up while it's active." : "Add or change sounds on SoundDeck's Soundboard page."; }
+  }
+
+  $("item").onchange = function () {
+    settings.item = this.value;
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ event: "setSettings", context: uuid, payload: settings }));
+  };
+</script>
+</body>
+</html>

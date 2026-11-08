@@ -1,0 +1,155 @@
+{
+  "Name": "SoundDeck",
+  "Version": "1.3.1.0",
+  "Author": "SoundDeck",
+  "Description": "Control SoundDeck's Game, Chat, Media and Aux volumes with your Stream Deck+ dials.",
+  "Icon": "images/plugin",
+  "CategoryIcon": "images/category",
+  "Category": "SoundDeck",
+  "CodePathWin": "SoundDeckPlugin.exe",
+  "SDKVersion": 2,
+  "Software": { "MinimumVersion": "6.4" },
+  "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+  "UUID": "com.sounddeck.controls",
+  "Actions": [
+    {
+      "UUID": "com.sounddeck.controls.game",
+      "Name": "Game volume",
+      "Icon": "images/game",
+      "Tooltip": "Turn to change Game volume. Press or tap to mute.",
+      "Controllers": [ "Encoder" ],
+      "Encoder": { "layout": "$B1", "Icon": "images/game", "TriggerDescription": { "Rotate": "Volume", "Push": "Mute", "Touch": "Mute" } },
+      "States": [ { "Image": "images/game" } ],
+      "SupportedInMultiActions": false
+    },
+    {
+      "UUID": "com.sounddeck.controls.chat",
+      "Name": "Chat volume",
+      "Icon": "images/chat",
+      "Tooltip": "Turn to change Chat volume. Press or tap to mute.",
+      "Controllers": [ "Encoder" ],
+      "Encoder": { "layout": "$B1", "Icon": "images/chat", "TriggerDescription": { "Rotate": "Volume", "Push": "Mute", "Touch": "Mute" } },
+      "States": [ { "Image": "images/chat" } ],
+      "SupportedInMultiActions": false
+    },
+    {
+      "UUID": "com.sounddeck.controls.media",
+      "Name": "Media volume",
+      "Icon": "images/media",
+      "Tooltip": "Turn to change Media volume. Press or tap to mute.",
+      "Controllers": [ "Encoder" ],
+      "Encoder": { "layout": "$B1", "Icon": "images/media", "TriggerDescription": { "Rotate": "Volume", "Push": "Mute", "Touch": "Mute" } },
+      "States": [ { "Image": "images/media" } ],
+      "SupportedInMultiActions": false
+    },
+    {
+      "UUID": "com.sounddeck.controls.aux",
+      "Name": "Aux volume",
+      "Icon": "images/auxch",
+      "Tooltip": "Turn to change Aux volume. Press or tap to mute.",
+      "Controllers": [ "Encoder" ],
+      "Encoder": { "layout": "$B1", "Icon": "images/auxch", "TriggerDescription": { "Rotate": "Volume", "Push": "Mute", "Touch": "Mute" } },
+      "States": [ { "Image": "images/auxch" } ],
+      "SupportedInMultiActions": false
+    },
+    {
+      "UUID": "com.sounddeck.controls.gameout",
+      "Name": "Game output",
+      "Icon": "images/gameout",
+      "Tooltip": "Press to switch which device Game plays through. Pick two outputs in its settings to toggle between them.",
+      "PropertyInspectorPath": "pi.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/gameout", "ShowTitle": false } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.chatout",
+      "Name": "Chat output",
+      "Icon": "images/chatout",
+      "Tooltip": "Press to switch which device Chat plays through. Pick two outputs in its settings to toggle between them.",
+      "PropertyInspectorPath": "pi.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/chatout", "ShowTitle": false } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.mediaout",
+      "Name": "Media output",
+      "Icon": "images/mediaout",
+      "Tooltip": "Press to switch which device Media plays through. Pick two outputs in its settings to toggle between them.",
+      "PropertyInspectorPath": "pi.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/mediaout", "ShowTitle": false } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.auxout",
+      "Name": "Aux output",
+      "Icon": "images/auxout",
+      "Tooltip": "Press to switch which device Aux plays through. Pick two outputs in its settings to toggle between them.",
+      "PropertyInspectorPath": "pi.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/auxout", "ShowTitle": false } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.sound",
+      "Name": "Soundboard sound",
+      "Icon": "images/sound",
+      "Tooltip": "Plays a sound from SoundDeck's soundboard. Pick which one in its settings.",
+      "PropertyInspectorPath": "pi-pick.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/sound", "ShowTitle": false } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.stopsounds",
+      "Name": "Stop sounds",
+      "Icon": "images/stopsounds",
+      "Tooltip": "Stops every soundboard sound that's playing.",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/stopsounds" } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.profile",
+      "Name": "Profile",
+      "Icon": "images/profile",
+      "Tooltip": "Switches to a SoundDeck profile. Pick which one in its settings.",
+      "PropertyInspectorPath": "pi-pick.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/profile", "ShowTitle": false } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.side",
+      "DisableAutomaticStates": true,
+      "Name": "Hear yourself",
+      "Icon": "images/side_on",
+      "Tooltip": "Turns hearing your own mic in your headset on and off.",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/side_off" }, { "Image": "images/side_on" } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.chatmute",
+      "DisableAutomaticStates": true,
+      "Name": "Mute chat",
+      "Icon": "images/chat_live",
+      "Tooltip": "Streamer mode: mutes you in Discord only. Your stream still hears you.",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/chat_live" }, { "Image": "images/chat_muted" } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.mix",
+      "DisableAutomaticStates": true,
+      "Name": "Music in mic",
+      "Icon": "images/mix_on",
+      "Tooltip": "Turns music in your mic (Mic Mix) on and off.",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/mix_off" }, { "Image": "images/mix_on" } ],
+      "SupportedInMultiActions": true
+    }
+  ]
+}

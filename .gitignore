@@ -1,0 +1,13 @@
+# Built files (made by build.bat / publish-update.bat)
+*.exe
+*.log
+dist/
+StreamDeckPlugin/build/
+Installer/stage/
+
+# Downloaded at install time, not ours to share
+rnnoise_mono.dll
+VBCABLE/
+
+# Written per-PC by the installer
+sounddeck_path.txt
