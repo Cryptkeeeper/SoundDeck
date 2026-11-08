@@ -124,6 +124,9 @@ namespace SoundDeckPlugin
                     else if (target == "chatmute") { if (!Command("chatmute")) ShowAlert(ctx); }
                     else if (target == "stopsounds") { if (!Command("stopsounds")) ShowAlert(ctx); }
                     else if (target == "ptt") { if (!Command("ptt down")) ShowAlert(ctx); else SetKeyState(ctx, 1); }
+                    else if (target == "bleep") { if (!Command("bleep down")) ShowAlert(ctx); else SetKeyState(ctx, 1); }
+                    else if (target == "voicefx") { if (!Command("voicefx")) ShowAlert(ctx); }
+                    else if (target == "streammon") { if (!Command("streammon")) ShowAlert(ctx); }
                     else if (target == "sound" || target == "profile")
                     {
                         string item = ItemOf(ctx);
@@ -133,6 +136,7 @@ namespace SoundDeckPlugin
                     break;
                 case "keyUp":
                     if (target == "ptt") { Command("ptt up"); SetKeyState(ctx, 0); }
+                    else if (target == "bleep") { Command("bleep up"); SetKeyState(ctx, 0); }
                     break;
             }
         }
@@ -149,7 +153,8 @@ namespace SoundDeckPlugin
         static string[] sounds = new string[0];             // slot names, index 0 = slot 1
         static List<string> profiles = new List<string>();
         static string activeProfile = "";
-        static bool sideOn, chatMuted;
+        static bool sideOn, chatMuted, fxOn, monOn;
+        static string fxName = "Reverb";
 
         static string ItemOf(string ctx)
         {
@@ -257,7 +262,8 @@ namespace SoundDeckPlugin
         {
             if (action == null) return null;
             string last = action.Substring(action.LastIndexOf('.') + 1);
-            if (last == "mix" || last == "side" || last == "sound" || last == "stopsounds" || last == "profile" || last == "chatmute" || last == "ptt") return last;
+            if (last == "mix" || last == "side" || last == "sound" || last == "stopsounds" || last == "profile" || last == "chatmute" || last == "ptt"
+                || last == "bleep" || last == "voicefx" || last == "streammon") return last;
             if (last.EndsWith("out"))
             {
                 string ch = Channels.FirstOrDefault(c => c.Equals(last.Substring(0, last.Length - 3), StringComparison.OrdinalIgnoreCase));
@@ -271,10 +277,19 @@ namespace SoundDeckPlugin
             bool online = soundDeck != null;
             if (target.StartsWith("out:")) { RefreshOutput(ctx, target.Substring(4)); return; }
             if (target == "sound" || target == "profile") { RefreshPick(ctx, target); return; }
-            if (target == "stopsounds" || target == "ptt") return;
-            if (target == "mix" || target == "side" || target == "chatmute")
+            if (target == "stopsounds" || target == "ptt" || target == "bleep") return;
+            if (target == "voicefx")
             {
-                bool on = online && (target == "mix" ? mixOn : target == "side" ? sideOn : chatMuted);
+                // Shows which effect is picked; lit while it's on.
+                Send(new Dictionary<string, object> { { "event", "setTitle" }, { "context", ctx },
+                    { "payload", new Dictionary<string, object> { { "title", "" }, { "target", 0 } } } });
+                Send(new Dictionary<string, object> { { "event", "setImage" }, { "context", ctx },
+                    { "payload", new Dictionary<string, object> { { "image", KeyImage.Label("VOICE FX", "#B57BFF", online ? fxName : "SoundDeck off", online && fxOn) }, { "target", 0 } } } });
+                return;
+            }
+            if (target == "mix" || target == "side" || target == "chatmute" || target == "streammon")
+            {
+                bool on = online && (target == "mix" ? mixOn : target == "side" ? sideOn : target == "streammon" ? monOn : chatMuted);
                 Send(new Dictionary<string, object> { { "event", "setState" }, { "context", ctx },
                     { "payload", new Dictionary<string, object> { { "state", on ? 1 : 0 } } } });
                 return;
@@ -398,6 +413,17 @@ namespace SoundDeckPlugin
             {
                 chatMuted = p[1] == "1";
                 RefreshTarget("chatmute");
+            }
+            else if (p[0] == "voicefx" && p.Length >= 3)
+            {
+                fxOn = p[1] == "1";
+                fxName = string.Join(" ", p.Skip(2));
+                RefreshTarget("voicefx");
+            }
+            else if (p[0] == "streammon" && p.Length == 2)
+            {
+                monOn = p[1] == "1";
+                RefreshTarget("streammon");
             }
         }
 

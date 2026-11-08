@@ -321,6 +321,13 @@ namespace SoundDeck
         public bool Running { get { return thread != null && thread.IsAlive; } }
         public string StreamDeviceId { get { return streamId; } }
 
+        // Listen to your stream: plays the stream mix (or the chat mix) into your headset so you can check it.
+        public volatile string MonitorId;          // output device, null = off
+        public volatile bool MonitorChat;          // false = what the stream hears, true = what Discord hears
+        public volatile bool MonitorVoice;         // include your own voice
+        public volatile float MonitorGain = 1f;
+        public volatile string MonitorStatus = "Off";
+
         public void Start(string mic, string cable, string stream)
         {
             Stop();
@@ -356,6 +363,9 @@ namespace SoundDeck
             var sources = new Dictionary<uint, CaptureStream>();
             var denoise = new NoiseRemoval.Stream();
             var dyn = new Dynamics(true); // gate + compressor; this stream drives the live readouts
+            var fx = new VoiceFx();
+            RenderStream monOut = null;
+            string monOpen = null;
             try
             {
                 var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
@@ -375,6 +385,7 @@ namespace SoundDeck
                 var streamApps = new float[MixFormat.Rate * 2];
                 var srcBuf = new float[MixFormat.Rate * 2];
                 var streamMix = new float[MixFormat.Rate * 2];
+                var monBuf = new float[MixFormat.Rate * 2];
                 SourceSet applied = null;
                 var micGain = new Dictionary<uint, float>();
                 var streamGain = new Dictionary<uint, float>();
@@ -420,6 +431,7 @@ namespace SoundDeck
                     mic.Fifo.ReadAdd(micBuf, n, 1f);
                     denoise.Process(micBuf, frames);
                     dyn.Process(micBuf, frames);
+                    fx.Process(micBuf, frames);
                     Board.ReadAdd(boardBuf, n);
                     float mg = MediaOn ? MediaGain : 0f;
                     foreach (var kv in sources)
@@ -452,6 +464,37 @@ namespace SoundDeck
                         if (room > 0) streamOut.Write(streamMix, Math.Min(room, frames));
                     }
 
+                    // Listen to your stream / chat mix in your headset.
+                    string monWant = MonitorId;
+                    if (monWant != monOpen)
+                    {
+                        if (monOut != null) { monOut.Dispose(); monOut = null; }
+                        monOpen = monWant;
+                        MonitorStatus = "Off";
+                        if (monWant != null)
+                        {
+                            try { monOut = RenderStream.Open(en, monWant); MonitorStatus = "Running"; }
+                            catch (Exception ex) { MonitorStatus = "Stopped: " + ex.Message; }
+                        }
+                    }
+                    if (monOut != null)
+                    {
+                        bool chatMix = MonitorChat, withVoice = MonitorVoice;
+                        float mgain = MonitorGain, sv2 = StreamVoiceGain, sb2 = StreamBoard ? 1f : 0f;
+                        for (int i = 0; i < n; i++)
+                        {
+                            float v = chatMix ? boardBuf[i] + mediaBuf[i] + (withVoice ? micBuf[i] * voice : 0f)
+                                              : streamApps[i] + boardBuf[i] * sb2 + (withVoice ? micBuf[i] * sv2 : 0f);
+                            monBuf[i] = Clip(v * mgain);
+                        }
+                        try
+                        {
+                            int room = monOut.FramesToWrite(TargetFrames * 2);
+                            if (room > 0) monOut.Write(monBuf, Math.Min(room, frames));
+                        }
+                        catch (Exception ex) { monOut.Dispose(); monOut = null; MonitorStatus = "Stopped: " + ex.Message; }
+                    }
+
                     // Keep latency from creeping up if a device's clock runs slightly fast.
                     mic.Fifo.TrimTo(TargetFrames * 2 * 3);
                     foreach (var s in sources.Values) s.Fifo.TrimTo(TargetFrames * 2 * 3);
@@ -468,7 +511,9 @@ namespace SoundDeck
                 if (mic != null) mic.Dispose();
                 if (outp != null) outp.Dispose();
                 if (streamOut != null) streamOut.Dispose();
+                if (monOut != null) monOut.Dispose();
                 StreamStatus = "Off";
+                MonitorStatus = "Off";
                 denoise.Dispose();
             }
         }
@@ -548,6 +593,7 @@ namespace SoundDeck
             RenderStream outp = null;
             var denoise = new NoiseRemoval.Stream();
             var dyn = new Dynamics(false);
+            var fx = new VoiceFx();
             try
             {
                 var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
@@ -572,6 +618,7 @@ namespace SoundDeck
                         cap.Fifo.ReadAdd(micBuf, n, 1f);
                         denoise.Process(micBuf, frames);
                         dyn.Process(micBuf, frames);
+                        fx.Process(micBuf, frames);
                         float g = Gain;
                         for (int i = 0; i < n; i++) mix[i] += micBuf[i] * g;
                     }

@@ -1,6 +1,6 @@
 {
   "Name": "SoundDeck",
-  "Version": "1.4.0.0",
+  "Version": "1.5.0.0",
   "Author": "SoundDeck",
   "Description": "Control SoundDeck's Game, Chat, Media and Aux volumes with your Stream Deck+ dials.",
   "Icon": "images/plugin",
@@ -150,6 +150,35 @@
       "Controllers": [ "Keypad" ],
       "States": [ { "Image": "images/ptt_idle" }, { "Image": "images/ptt_live" } ],
       "SupportedInMultiActions": false
+    },
+    {
+      "UUID": "com.sounddeck.controls.voicefx",
+      "Name": "Voice effect",
+      "Icon": "images/voicefx",
+      "Tooltip": "Turns your voice effect on and off. Pick the effect on SoundDeck's Effects page.",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/voicefx", "ShowTitle": false } ],
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.sounddeck.controls.bleep",
+      "DisableAutomaticStates": true,
+      "Name": "Bleep",
+      "Icon": "images/bleep_live",
+      "Tooltip": "Hold to replace your voice with a beep, for friends and your stream.",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/bleep_idle" }, { "Image": "images/bleep_live" } ],
+      "SupportedInMultiActions": false
+    },
+    {
+      "UUID": "com.sounddeck.controls.streammon",
+      "DisableAutomaticStates": true,
+      "Name": "Listen to stream",
+      "Icon": "images/mon_on",
+      "Tooltip": "Plays your stream's mix in your headset so you can check it.",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "images/mon_off" }, { "Image": "images/mon_on" } ],
+      "SupportedInMultiActions": true
     },
     {
       "UUID": "com.sounddeck.controls.mix",

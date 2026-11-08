@@ -619,7 +619,9 @@ namespace SoundDeck
             BuildMic();
             BuildMicMix();
             BuildStreaming();
+            BuildStreamMonitor();
             BuildSoundboard();
+            BuildEffects();
             BuildDucking();
             BuildProfiles();
             BuildSettings();
@@ -725,7 +727,7 @@ namespace SoundDeck
             nav.Controls.Add(logo);
             Lbl(nav, "SoundDeck", 52, 23, 13f, true, Fg);
 
-            string[] names = { "Mixer", "Equalizer", "Microphone", "Mic Mix", "Streaming", "Soundboard", "Ducking", "Profiles", "Settings" };
+            string[] names = { "Mixer", "Equalizer", "Microphone", "Mic Mix", "Streaming", "Soundboard", "Effects", "Ducking", "Profiles", "Settings" };
             for (int i = 0; i < names.Length; i++)
             {
                 string name = names[i];
@@ -961,6 +963,9 @@ namespace SoundDeck
             PublishSounds();
             PublishProfiles();
             PublishHearYourself();
+            PublishStreamMonitor();
+            control.Publish("bleep", "bleep 0");
+            ApplyFx();
             UpdateChatMuteButton();
             UpdateMixToggle();
         }
@@ -992,6 +997,9 @@ namespace SoundDeck
             else if (p[0] == "profile" && cmd.Length > 8) ApplyProfile(cmd.Substring(8), false);
             else if (p[0] == "sidetoggle") ToggleHearYourself();
             else if (p[0] == "chatmute") ToggleChatMute();
+            else if (p[0] == "voicefx") ToggleFx();
+            else if (p[0] == "bleep" && p.Length == 2) bleepDeckHeld = p[1] == "down";
+            else if (p[0] == "streammon") ToggleStreamMonitor();
             else if (p[0] == "ptt" && p.Length == 2) pttDeckHeld = p[1] == "down";
             else if (p[0] == "update" && !Updater.IsDevCopy) { autoInstallUpdate = true; CheckForUpdates(false); }
         }
@@ -1563,6 +1571,7 @@ namespace SoundDeck
             DarkTitleBar();
             RegisterMixHotkey();
             RegisterSideHotkey();
+            RegisterFxHotkey();
             BeginInvoke(new Action(GoXlrWindowReady));
         }
 
@@ -1585,6 +1594,7 @@ namespace SoundDeck
         {
             if (m.Msg == 0x0312 && m.WParam.ToInt32() == HotkeyId) ToggleMediaMix();
             if (m.Msg == 0x0312 && m.WParam.ToInt32() == SideHotkeyId) ToggleHearYourself();
+            if (m.Msg == 0x0312 && m.WParam.ToInt32() == FxHotkeyId) ToggleFx();
             base.WndProc(ref m);
         }
 
@@ -1913,6 +1923,8 @@ namespace SoundDeck
             TickMicMix();
             TickHearYourself();
             TickStreaming();
+            TickStreamMonitor();
+            TickEffectsStatus();
             TickProfiles();
             LoadMicColumn();
             Settings.SaveIfDirty();
@@ -1937,6 +1949,7 @@ namespace SoundDeck
             FillOutputsPanel();
             if (sideDev != null) FillOutCombo(sideDev, "side.dev");
             if (sbDev != null) FillOutCombo(sbDev, "sb.dev");
+            if (monDev != null) FillOutCombo(monDev, "mon.dev");
             FillDeviceCombo(eqDevice, renderDevs, Settings.Get("eq.dev", Audio.GetDefaultId(EDataFlow.Render) ?? ""), false);
             FillDeviceCombo(micDevice, captureDevs, Settings.Get("mic.dev", null) ?? RealMicId(), false);
             LoadEqDevice();
