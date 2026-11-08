@@ -623,6 +623,7 @@ namespace SoundDeck
             BuildSettings();
             BuildTray();
             BuildHearYourself();
+            BuildDynamicsUi();
             BuildUpdates(pages["Settings"]);
             BuildGoXlr(pages["Settings"]);
 

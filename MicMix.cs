@@ -355,6 +355,7 @@ namespace SoundDeck
             RenderStream outp = null, streamOut = null;
             var sources = new Dictionary<uint, CaptureStream>();
             var denoise = new NoiseRemoval.Stream();
+            var dyn = new Dynamics(true); // gate + compressor; this stream drives the live readouts
             try
             {
                 var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
@@ -418,6 +419,7 @@ namespace SoundDeck
                     Array.Clear(streamApps, 0, n);
                     mic.Fifo.ReadAdd(micBuf, n, 1f);
                     denoise.Process(micBuf, frames);
+                    dyn.Process(micBuf, frames);
                     Board.ReadAdd(boardBuf, n);
                     float mg = MediaOn ? MediaGain : 0f;
                     foreach (var kv in sources)
@@ -545,6 +547,7 @@ namespace SoundDeck
             CaptureStream cap = null;
             RenderStream outp = null;
             var denoise = new NoiseRemoval.Stream();
+            var dyn = new Dynamics(false);
             try
             {
                 var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
@@ -568,6 +571,7 @@ namespace SoundDeck
                         Array.Clear(micBuf, 0, n);
                         cap.Fifo.ReadAdd(micBuf, n, 1f);
                         denoise.Process(micBuf, frames);
+                        dyn.Process(micBuf, frames);
                         float g = Gain;
                         for (int i = 0; i < n; i++) mix[i] += micBuf[i] * g;
                     }

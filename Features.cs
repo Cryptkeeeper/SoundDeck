@@ -103,6 +103,7 @@ namespace SoundDeck
             if (showMeters && pages["Ducking"].Visible) duckChatMeter.Value = meterVal[1];
             TickMicColumn(showMeters);
             TickStreamMeter(showMeters);
+            TickDynamicsUi(showMeters);
 
             TickDucking(peak[1]);
         }
@@ -806,7 +807,7 @@ namespace SoundDeck
                 yield return "ch." + ch + ".svol"; yield return "ch." + ch + ".smute";
                 yield return "duck." + ch;
             }
-            foreach (var k in new[] { "duck.on", "duck.amount", "duck.sens", "side.on", "side.vol", "mix.mediaVol", "mix.micVol", "mix.source", "sb.vol", "ns.on", "ns.strength", "stream.on", "stream.voice", "stream.board" })
+            foreach (var k in new[] { "duck.on", "duck.amount", "duck.sens", "side.on", "side.vol", "mix.mediaVol", "mix.micVol", "mix.source", "sb.vol", "ns.on", "ns.strength", "stream.on", "stream.voice", "stream.board", "gate.on", "gate.thr", "gate.rel", "comp.on", "comp.thr", "comp.ratio", "comp.makeup" })
                 yield return k;
         }
 
@@ -1003,6 +1004,7 @@ namespace SoundDeck
             stOn.Checked = Settings.GetBool("stream.on", false);
             stVoice.Value = Clamp(Settings.GetInt("stream.voice", 100), 0, 200);
             stBoard.Checked = Settings.GetBool("stream.board", true);
+            ReloadDynamicsFromSettings();
             for (int i = 0; i < 4; i++)
             {
                 chSVol[i].Value = Clamp(Settings.GetInt("ch." + Channels[i] + ".svol", 100), 0, 100);
