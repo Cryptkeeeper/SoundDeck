@@ -33,7 +33,7 @@ namespace SoundDeck
 
         public static Version Current { get { return new Version(AppVersion.Value); } }
         static string ExePath { get { return Application.ExecutablePath; } }
-        static string Dir { get { return Path.GetDirectoryName(ExePath); } }
+        public static string Dir { get { return Path.GetDirectoryName(ExePath); } }
 
         // The copy in the source folder (next to SoundDeck.cs) is the one being developed, so it never updates itself.
         public static bool IsDevCopy { get { return File.Exists(Path.Combine(Dir, "SoundDeck.cs")); } }
@@ -196,6 +196,12 @@ namespace SoundDeck
             {
                 updStatus.Text = "This is your development copy (it sits next to the source code), so it doesn't update itself. Copies installed with SoundDeckSetup do.";
                 updCheck.Enabled = false; updAuto.Enabled = false;
+                if (Environment.GetEnvironmentVariable("SOUNDDECK_EXTRAS") != null) // testing aid: show the missing-parts window
+                {
+                    var once = new Timer { Interval = 3000 };
+                    once.Tick += (s, e) => { once.Stop(); CheckExtras(false); };
+                    once.Start();
+                }
                 return;
             }
 
@@ -248,6 +254,7 @@ namespace SoundDeck
                 pendingUpdate = null; updNow.Visible = false;
                 updStatus.Text = "You're up to date (checked " + DateTime.Now.ToString("h:mm tt") + ").";
                 updStatus.ForeColor = Good;
+                CheckExtras(userAsked); // SoundDeck itself is current; now offer any missing add-ons
                 return;
             }
             pendingUpdate = info;

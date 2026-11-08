@@ -3,14 +3,14 @@ using System.Reflection;
 
 [assembly: AssemblyTitle("SoundDeck")]
 [assembly: AssemblyProduct("SoundDeck")]
-[assembly: AssemblyVersion("1.8.0.0")]
-[assembly: AssemblyFileVersion("1.8.0.0")]
+[assembly: AssemblyVersion("1.8.1.0")]
+[assembly: AssemblyFileVersion("1.8.1.0")]
 
 namespace SoundDeck
 {
     static class AppVersion
     {
-        public const string Value = "1.8.0";
-        public const string Notes = "New Effects page: voice effects (reverb, echo, deep, high, robot, megaphone) and a bleep key.\nListen to your stream: hear your stream or Discord mix in your headset (Streaming page).\nNew Stream Deck keys: Voice effect, Bleep and Listen to stream (reinstall the plugin from the installer to get them)."; // shown in "What's new" after updating
+        public const string Value = "1.8.1";
+        public const string Notes = "SoundDeck now offers to install missing parts it needs (noise removal, Equalizer APO, VB-CABLE, GoXLR Utility) when it checks for updates.\nYou don't need to reinstall the Stream Deck plugin: updates replace it for you."; // shown in "What's new" after updating
     }
 }
