@@ -108,7 +108,8 @@ namespace SoundDeck
             }
             menu.Items.Add(new ToolStripSeparator());
             bool inMic = InMic(exe);
-            var mic = new ToolStripMenuItem("Play in my mic (with " + (mixHotkeyBox != null ? mixHotkeyBox.Text : "the music hotkey") + ")") { Checked = inMic };
+            bool hasKey = mixHotkeyBox != null && Settings.GetInt("mix.vk", 0) != 0;
+            var mic = new ToolStripMenuItem("Play in my mic (" + (hasKey ? "with " + mixHotkeyBox.Text : "when music in mic is on") + ")") { Checked = inMic };
             mic.Click += (s, e) => SetMic(exe, !inMic);
             menu.Items.Add(mic);
             if (StreamerOn)

@@ -1,4 +1,4 @@
-// "Gate & compressor" section on the Equalizer page, below the EQ bands.
+// "Gate & compressor" section on the Microphone page, right after Voice processing.
 
 using System;
 using System.Drawing;
@@ -14,28 +14,38 @@ namespace SoundDeck
 
         void BuildDynamicsUi()
         {
-            var p = pages["Equalizer"];
-            Lbl(p, "Gate & compressor", 22, 540, 12f, true, Fg);
-            var note = Lbl(p, "For your mic: evens out your volume and silences it between words. Applies to what friends and your stream hear. Needs Mic Mix on.", 25, 568, 9f, false, Dim);
+            var p = pages["Microphone"];
+            // Make room after Voice processing: Hear yourself and Push to talk move down. (-10 below: this
+            // section was laid out for y = 540, and it starts at 530 here.)
+            const int Room = 440, SectionTop = 530;
+            p.SuspendLayout();
+            foreach (Control c in p.Controls) if (c.Top >= SectionTop - 10) c.Top += Room;
+            BuildDynamicsAt(p, SectionTop - 540);
+            p.ResumeLayout();
+        }
+
+        void BuildDynamicsAt(Panel p, int dy)
+        {
+            Lbl(p, "Gate & compressor", 22, 540 + dy, 12f, true, Fg);
+            var note = Lbl(p, "For your mic: evens out your volume and silences it between words. Applies to what friends and your stream hear. Needs Mic Mix on.", 25, 568 + dy, 9f, false, Dim);
             note.MaximumSize = new Size(760, 0);
 
-            gateOn = Chk(p, "Noise gate", 25, 606);
+            gateOn = Chk(p, "Noise gate", 25, 606 + dy);
             gateOn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            gateState = Lbl(p, "", 160, 608, 9.5f, true, Dim);
-            gateThr = SliderRow(p, "Opens at", 640, -80, -20, "gate.thr", -50, v => v + " dB");
-            gateRel = SliderRow(p, "Closes after", 680, 50, 1000, "gate.rel", 200, v => v + " ms");
-            var gTip = Lbl(p, "Talk normally and watch Open / Closed. Lower \"Opens at\" until your quietest words open it; raise it if keyboard or fan noise does.", 150, 718, 8.5f, false, Dim);
+            gateState = Lbl(p, "", 160, 608 + dy, 9.5f, true, Dim);
+            gateThr = SliderRow(p, "Opens at", 640 + dy, -80, -20, "gate.thr", -50, v => v + " dB");
+            gateRel = SliderRow(p, "Closes after", 680 + dy, 50, 1000, "gate.rel", 200, v => v + " ms");
+            var gTip = Lbl(p, "Talk normally and watch Open / Closed. Lower \"Opens at\" until your quietest words open it; raise it if keyboard or fan noise does.", 150, 718 + dy, 8.5f, false, Dim);
             gTip.MaximumSize = new Size(640, 0);
 
-            compOn = Chk(p, "Compressor", 25, 760);
+            compOn = Chk(p, "Compressor", 25, 760 + dy);
             compOn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            compState = Lbl(p, "", 160, 762, 9.5f, true, Dim);
-            compThr = SliderRow(p, "Starts at", 794, -50, 0, "comp.thr", -20, v => v + " dB");
-            compRatio = SliderRow(p, "Strength", 834, 1, 20, "comp.ratio", 4, v => v + ":1");
-            compMakeup = SliderRow(p, "Boost after", 874, 0, 24, "comp.makeup", 6, v => "+" + v + " dB");
-            var cTip = Lbl(p, "Turns loud moments (laughing, shouting) down so you sound even. Strength 3:1 to 6:1 suits most voices; \"Boost after\" brings your overall level back up.", 150, 912, 8.5f, false, Dim);
+            compState = Lbl(p, "", 160, 762 + dy, 9.5f, true, Dim);
+            compThr = SliderRow(p, "Starts at", 794 + dy, -50, 0, "comp.thr", -20, v => v + " dB");
+            compRatio = SliderRow(p, "Strength", 834 + dy, 1, 20, "comp.ratio", 4, v => v + ":1");
+            compMakeup = SliderRow(p, "Boost after", 874 + dy, 0, 24, "comp.makeup", 6, v => "+" + v + " dB");
+            var cTip = Lbl(p, "Turns loud moments (laughing, shouting) down so you sound even. Strength 3:1 to 6:1 suits most voices; \"Boost after\" brings your overall level back up.", 150, 912 + dy, 8.5f, false, Dim);
             cTip.MaximumSize = new Size(640, 0);
-            new Panel { Parent = p, Left = 0, Top = 950, Width = 10, Height = 30, BackColor = Bg }; // bottom padding when scrolling
 
             gateOn.Checked = Settings.GetBool("gate.on", false);
             compOn.Checked = Settings.GetBool("comp.on", false);
@@ -68,10 +78,10 @@ namespace SoundDeck
             foreach (var c in new Control[] { compThr, compRatio, compMakeup }) c.Enabled = compOn.Checked;
         }
 
-        // Live "Open / Closed" and "turning down X dB" while the Equalizer page is showing.
+        // Live "Open / Closed" and "turning down X dB" while the Microphone page is showing.
         void TickDynamicsUi(bool onScreen)
         {
-            if (gateState == null || !onScreen || !pages["Equalizer"].Visible) return;
+            if (gateState == null || !onScreen || !pages["Microphone"].Visible) return;
             bool running = mixEngine.Running;
             if (!gateOn.Checked) { gateState.Text = ""; }
             else if (!running) { gateState.Text = "Turn on Mic Mix to use it"; gateState.ForeColor = Warn; }

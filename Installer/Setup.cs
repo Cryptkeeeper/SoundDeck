@@ -252,7 +252,10 @@ namespace SoundDeckSetup
             string setupCopy = Path.Combine(o.Dir, "SoundDeckSetup.exe");
             if (!string.Equals(Path.GetFullPath(self), Path.GetFullPath(setupCopy), StringComparison.OrdinalIgnoreCase)) File.Copy(self, setupCopy, true);
 
-            if (o.Noise)
+            // Already there from an earlier install (it never changes): skip the 36 MB download.
+            if (o.Noise && File.Exists(Path.Combine(o.Dir, "rnnoise_mono.dll")) && new FileInfo(Path.Combine(o.Dir, "rnnoise_mono.dll")).Length > 1000000)
+                report(48, "Noise removal is already installed.");
+            else if (o.Noise)
             {
                 string dll = Path.Combine(o.Dir, "rnnoise_mono.dll");
                 try
@@ -512,7 +515,9 @@ namespace SoundDeckSetup
             choices = new Panel { Left = 28, Top = 112, Width = 524, Height = 458, BackColor = Ui.Card };
             Controls.Add(choices);
 
-            noise = Ui.Chk(choices, "Noise removal", "Downloads RNNoise (36 MB) from its official GitHub page. Removes fans, keyboard and background noise from your mic.", 16, 14);
+            bool hasNoise = File.Exists(Path.Combine(o.Dir, "rnnoise_mono.dll"));
+            noise = Ui.Chk(choices, "Noise removal", hasNoise ? "Already installed, so nothing to download."
+                : "Downloads RNNoise (36 MB) from its official GitHub page. Removes fans, keyboard and background noise from your mic.", 16, 14);
             noise.Checked = true;
 
             bool hasApo = Detect.ApoDir() != null;

@@ -458,7 +458,7 @@ namespace SoundDeck
             };
 
             Lbl(p, "Hotkey", 25, 712, 9.5f, false, Dim);
-            sideHotkeyBox = HotkeyBox(p, 150, 708, "side", 3, (int)Keys.H, SideHotkeyId, RegisterSideHotkey);
+            sideHotkeyBox = HotkeyBox(p, 150, 708, "side", 0, 0, SideHotkeyId, RegisterSideHotkey);
             sideHotkeyStatus = Lbl(p, "Click the box, then press your keys. Backspace clears it.", 380, 712, 8.5f, false, Dim);
             FillOutCombo(sideDev, "side.dev");
             RegisterSideHotkey();
@@ -493,8 +493,8 @@ namespace SoundDeck
         {
             if (!IsHandleCreated || sideHotkeyStatus == null) return;
             UnregisterHotKey(Handle, SideHotkeyId);
-            int vk = Settings.GetInt("side.vk", (int)Keys.H);
-            int mods = Settings.GetInt("side.mods", 3);
+            int vk = Settings.GetInt("side.vk", 0);
+            int mods = Settings.GetInt("side.mods", 0);
             bool ok = vk != 0 && RegisterHotKey(Handle, SideHotkeyId, (uint)(mods | 0x4000), (uint)vk);
             bool clash = vk != 0 && !ok;
             sideHotkeyStatus.Text = clash ? "Another program already uses that hotkey. Pick a different one." : "Click the box, then press your keys. Backspace clears it.";
@@ -621,7 +621,7 @@ namespace SoundDeck
             else if (sideEngine.Running) sideEngine.Stop();
 
             string st = !sideOn.Checked ? "" : badMic ? "Pick your real mic at the top of this page." : sideEngine.Status;
-            sideStatus.Text = st == "Running" ? "On. Press " + sideHotkeyBox.Text + " to turn it off." : st;
+            sideStatus.Text = st == "Running" ? (Settings.GetInt("side.vk", 0) == 0 ? "On" : "On. Press " + sideHotkeyBox.Text + " to turn it off.") : st;
             sideStatus.ForeColor = st == "Running" ? Good : st.StartsWith("Stopped") || badMic ? Accent : Dim;
         }
 

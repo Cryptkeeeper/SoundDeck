@@ -623,6 +623,14 @@ namespace SoundDeck
             Font = new Font("Segoe UI", 9.5f);
             Icon = MakeIcon();
 
+            // Older versions turned on Ctrl+Alt+M (music) and Ctrl+Alt+H (hear yourself) by default. People who
+            // already had SoundDeck keep them; new installs start with no hotkeys, so nothing clashes with other apps.
+            if (Settings.Existed)
+            {
+                if (Settings.Get("mix.vk", null) == null) { Settings.Set("mix.vk", (int)Keys.M); Settings.Set("mix.mods", 3); }
+                if (Settings.Get("side.vk", null) == null) { Settings.Set("side.vk", (int)Keys.H); Settings.Set("side.mods", 3); }
+            }
+
             BuildShell();
             BuildMixer();
             BuildEq();
@@ -1482,7 +1490,7 @@ namespace SoundDeck
 
         void BuildMicMix()
         {
-            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Discord hear them. Your hotkey turns the music on and off; your voice always goes through.");
+            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Discord hear them. The button below (or a hotkey) turns the music on and off; your voice always goes through.");
 
             mixCableStatus = Lbl(p, "", 25, 92, 9.5f, false, Fg);
             mixCableStatus.MaximumSize = new Size(560, 0);
@@ -1505,7 +1513,7 @@ namespace SoundDeck
 
             Lbl(p, "Hotkey", 350, 206, 9.5f, false, Dim);
             mixHotkeyBox = new TextBox { Left = 350, Top = 228, Width = 220, BackColor = Card2, ForeColor = Fg, BorderStyle = BorderStyle.FixedSingle, ReadOnly = true, Cursor = Cursors.Hand };
-            mixHotkeyBox.Text = HotkeyText(Settings.GetInt("mix.mods", 3), Settings.GetInt("mix.vk", (int)Keys.M));
+            mixHotkeyBox.Text = HotkeyText(Settings.GetInt("mix.mods", 0), Settings.GetInt("mix.vk", 0));
             mixHotkeyBox.Enter += (s, e) => { if (IsHandleCreated) UnregisterHotKey(Handle, HotkeyId); mixHotkeyBox.BackColor = Color.FromArgb(70, 50, 40); };
             mixHotkeyBox.Leave += (s, e) => { mixHotkeyBox.BackColor = Card2; RegisterMixHotkey(); };
             mixHotkeyBox.KeyDown += (s, e) =>
@@ -1612,8 +1620,8 @@ namespace SoundDeck
         {
             if (!IsHandleCreated) return;
             UnregisterHotKey(Handle, HotkeyId);
-            int vk = Settings.GetInt("mix.vk", (int)Keys.M);
-            int mods = Settings.GetInt("mix.mods", 3);
+            int vk = Settings.GetInt("mix.vk", 0);
+            int mods = Settings.GetInt("mix.mods", 0);
             hotkeyOk = vk != 0 && RegisterHotKey(Handle, HotkeyId, (uint)(mods | 0x4000), (uint)vk);
             if (mixHotkeyStatus != null)
             {
