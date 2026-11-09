@@ -652,6 +652,7 @@ namespace SoundDeck
             BuildGoXlr(pages["Settings"]);
             BuildGoxLinkUi(pages["Settings"]);
             StartGoxPolling();
+            BuildTesting(); // TEMPORARY: see Testing.cs
 
             RefreshDevices(true);
             LoadEqDevice();
@@ -745,7 +746,7 @@ namespace SoundDeck
             nav.Controls.Add(logo);
             Lbl(nav, "SoundDeck", 52, 23, 13f, true, Fg);
 
-            string[] names = { "Mixer", "Equalizer", "Microphone", "Mic Mix", "Streaming", "Soundboard", "Effects", "Ducking", "Profiles", "Settings" };
+            string[] names = { "Mixer", "Equalizer", "Microphone", "Mic Mix", "Streaming", "Soundboard", "Effects", "Ducking", "Profiles", "Settings", "Testing" };
             for (int i = 0; i < names.Length; i++)
             {
                 string name = names[i];
