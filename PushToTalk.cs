@@ -30,7 +30,7 @@ namespace SoundDeck
         {
             var p = pages["Microphone"];
             Lbl(p, "Push to talk", 22, 770, 12f, true, Fg);
-            var note = Lbl(p, "Mutes your mic everywhere (Discord, games, your stream) unless you hold a key or mouse button. Works while you're in a game.", 25, 798, 9f, false, Dim);
+            var note = Lbl(p, "Mutes your mic everywhere (Harmony, games, your stream) unless you hold a key or mouse button. Works while you're in a game.", 25, 798, 9f, false, Dim);
             note.MaximumSize = new Size(760, 0);
 
             Lbl(p, "Mode", 25, 836, 9.5f, false, Dim);

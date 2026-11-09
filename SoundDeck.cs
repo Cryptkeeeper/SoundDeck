@@ -1082,7 +1082,7 @@ namespace SoundDeck
 
         static string GuessChannel(string exe)
         {
-            string[] chat = { "discord", "discordptb", "discordcanary", "teamspeak", "ts3client_win64", "ts3client_win32", "slack", "ms-teams", "teams",
+            string[] chat = { "harmony", "discord","discordptb", "discordcanary", "teamspeak", "ts3client_win64", "ts3client_win32", "slack", "ms-teams", "teams",
                               "zoom", "skype", "mumble", "element", "signal", "whatsapp", "guilded", "telegram" };
             string[] media = { "spotify", "chrome", "firefox", "msedge", "brave", "opera", "opera_gx", "vivaldi", "vlc", "mpc-hc64", "mpc-be64",
                                "foobar2000", "itunes", "applemusic", "wmplayer", "music.ui", "tidal", "deezer", "plex", "potplayermini64", "aimp", "musicbee" };
@@ -1491,7 +1491,7 @@ namespace SoundDeck
 
         void BuildMicMix()
         {
-            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Discord hear them. The button below (or a hotkey) turns the music on and off; your voice always goes through.");
+            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Harmony hear them. The button below (or a hotkey) turns the music on and off; your voice always goes through.");
 
             mixCableStatus = Lbl(p, "", 25, 92, 9.5f, false, Fg);
             mixCableStatus.MaximumSize = new Size(560, 0);
@@ -1693,10 +1693,10 @@ namespace SoundDeck
             var cable = FindCable();
             mixCableStatus.Text = cable == null
                 ? "Mic Mix needs a virtual mic. Install Steam (it includes one) or VB-CABLE (free, no ads), restart your PC, then come back here."
-                : "Ready. In Discord, set Input Device to \"" + DiscordInputName(cable) + "\".";
+                : "Ready. In Harmony, set your microphone to \"" + DiscordInputName(cable) + "\".";
             steps.Text =
-                "1.  In Discord: Settings > Voice & Video > Input Device > \"" + DiscordInputName(cable) + "\".\n" +
-                "2.  Tick \"Turn on Mic Mix\" above. Keep SoundDeck running, because your Discord mic now goes through it.\n" +
+                "1.  In Harmony's voice settings, set your microphone (input device) to \"" + DiscordInputName(cable) + "\".\n" +
+                "2.  Tick \"Turn on Mic Mix\" above. Keep SoundDeck running, because your Harmony mic now goes through it.\n" +
                 "3.  Put Spotify, your browser, etc. in the Media channel on the Mixer page.\n" +
                 (IsSteamCable(cable) ? "Steam's virtual mic is already on your PC, so there's nothing else to install." : "");
             mixCableStatus.ForeColor = cable != null ? Good : Accent;

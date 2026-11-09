@@ -34,7 +34,7 @@ namespace SoundDeck
 
         void BuildStreaming()
         {
-            var p = NewPage("Streaming", "Streaming", "SoundDeck makes a second mic just for your stream, so Discord and your stream each get their own mix, and you can mute yourself in Discord while your stream still hears you.");
+            var p = NewPage("Streaming", "Streaming", "SoundDeck makes a second mic just for your stream, so Harmony and your stream each get their own mix, and you can mute yourself in Harmony while your stream still hears you.");
 
             stOn = Chk(p, "Turn on streamer mode", 25, 104);
             stOn.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
@@ -81,7 +81,7 @@ namespace SoundDeck
             stChatMute = Btn(p, "", 25, 452, 300, 44);
             stChatMute.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             stChatMute.Click += (s, e) => ToggleChatMute();
-            var cm = Lbl(p, "Mutes you in Discord only. Your stream still hears you. Also on the Stream Deck as \"Mute chat\".", 340, 466, 9f, false, Dim);
+            var cm = Lbl(p, "Mutes you in Harmony only. Your stream still hears you. Also on the Stream Deck as \"Mute chat\".", 340, 466, 9f, false, Dim);
             cm.MaximumSize = new Size(440, 0);
 
             stStatus = Lbl(p, "", 25, 520, 9.5f, true, Dim);
@@ -163,7 +163,7 @@ namespace SoundDeck
 
             stNeed.Text = chat == null
                 ? "Set up Mic Mix first (it needs a virtual mic)."
-                : "Discord / chat apps use: \"" + DiscordInputName(chat) + "\"";
+                : "Harmony / chat apps use: \"" + DiscordInputName(chat) + "\"";
             stNeed.ForeColor = chat == null ? Accent : Dim;
 
             if (!on) { stObs.Text = ""; }

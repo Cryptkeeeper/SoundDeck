@@ -184,7 +184,7 @@ namespace SoundDeck
             Lbl(p, "Listen to", 25, 666, 9.5f, false, Dim);
             monWhat = Combo(p, 150, 662, 300);
             monWhat.Items.Add("What your stream hears");
-            monWhat.Items.Add("What Discord hears");
+            monWhat.Items.Add("What Harmony hears");
             monWhat.SelectedIndex = Clamp(Settings.GetInt("mon.what", 0), 0, 1);
             monWhat.SelectedIndexChanged += (s, e) => { Settings.Set("mon.what", monWhat.SelectedIndex); TickStreamMonitor(); };
 
@@ -226,7 +226,7 @@ namespace SoundDeck
             string st; Color c = Dim;
             if (!monOn.Checked) st = "";
             else if (!mixEngine.Running) { st = "Turn on Mic Mix to use this."; c = Warn; }
-            else if (monWhat.SelectedIndex == 0 && (stOn == null || !stOn.Checked)) { st = "Streamer mode is off. Pick What Discord hears instead."; c = Warn; }
+            else if (monWhat.SelectedIndex == 0 && (stOn == null || !stOn.Checked)) { st = "Streamer mode is off. Pick What Harmony hears instead."; c = Warn; }
             else if (mixEngine.MonitorStatus == "Running") { st = "Listening"; c = Good; }
             else { st = mixEngine.MonitorStatus; c = mixEngine.MonitorStatus.StartsWith("Stopped") ? Accent : Dim; }
             if (monStatus.Text != st) monStatus.Text = st;

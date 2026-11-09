@@ -136,7 +136,7 @@
       "DisableAutomaticStates": true,
       "Name": "Mute chat",
       "Icon": "images/chat_live",
-      "Tooltip": "Streamer mode: mutes you in Discord only. Your stream still hears you.",
+      "Tooltip": "Streamer mode: mutes you in Harmony only. Your stream still hears you.",
       "Controllers": [ "Keypad" ],
       "States": [ { "Image": "images/chat_live" }, { "Image": "images/chat_muted" } ],
       "SupportedInMultiActions": true

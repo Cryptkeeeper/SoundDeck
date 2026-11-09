@@ -312,7 +312,7 @@ namespace SoundDeck
 
         void BuildDucking()
         {
-            var p = NewPage("Ducking", "Auto-ducking", "When someone talks in your Chat channel (Discord, etc.), SoundDeck turns other audio down so you can hear them, then brings it back.");
+            var p = NewPage("Ducking", "Auto-ducking", "When someone talks in your Chat channel (Harmony, etc.), SoundDeck turns other audio down so you can hear them, then brings it back.");
 
             duckOn = Chk(p, "Turn on auto-ducking", 25, 96);
             duckOn.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
@@ -351,7 +351,7 @@ namespace SoundDeck
             p.Controls.Add(duckChatMeter);
             duckState = Lbl(p, "", 456, 320, 10f, true, Dim);
 
-            var note = Lbl(p, "Put Discord (or TeamSpeak, etc.) in the Chat channel on the Mixer page. " +
+            var note = Lbl(p, "Put Harmony (or Discord, etc.) in the Chat channel on the Mixer page. " +
                 "Your Stream Deck dials keep showing your normal level while ducking.", 25, 372, 9.5f, false, Dim);
             note.MaximumSize = new Size(760, 0);
             UpdateDuckLabels();

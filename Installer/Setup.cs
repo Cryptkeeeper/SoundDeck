@@ -544,7 +544,7 @@ namespace SoundDeckSetup
             string vm = Detect.VirtualMic();
             vb = Ui.Chk(choices, "Virtual mic (VB-CABLE)", vm != null
                 ? "Not needed: you already have \"" + vm + "\"."
-                : "Needed to send music, sounds and the cleaned-up mic to Discord and games. Downloads 1 MB from vb-audio.com. Windows asks permission, then click \"Install Driver\". Restart after.", 16, 172);
+                : "Needed to send music, sounds and the cleaned-up mic to Harmony and games. Downloads 1 MB from vb-audio.com. Windows asks permission, then click \"Install Driver\". Restart after.", 16, 172);
             vb.Checked = vm == null; Ui.Usable(vb, vm == null);
 
             bool hasGox = Detect.Mics().Any(m => m.IndexOf("GoXLR", StringComparison.OrdinalIgnoreCase) >= 0 || m.IndexOf("GO XLR", StringComparison.OrdinalIgnoreCase) >= 0);
@@ -613,7 +613,7 @@ namespace SoundDeckSetup
             if (inst.ApoInstalled) lines.Add("In the Equalizer APO window, tick your headphones/headset and your mic, then click OK.");
             if (inst.NeedsRestart) lines.Add("Restart your PC to finish setting up " +
                 (inst.ApoInstalled && inst.VbCableStarted ? "the equalizer and virtual mic." : inst.ApoInstalled ? "the equalizer." : "the virtual mic."));
-            lines.Add("In Discord and your games, set the mic to " + (Detect.VirtualMic() ?? (inst.NeedsRestart ? "\"CABLE Output (VB-Audio Virtual Cable)\" after restarting" : "your SoundDeck virtual mic")) + ", and turn on Mic Mix in SoundDeck.");
+            lines.Add("In Harmony and your games, set the mic to " + (Detect.VirtualMic() ?? (inst.NeedsRestart ? "\"CABLE Output (VB-Audio Virtual Cable)\" after restarting" : "your SoundDeck virtual mic")) + ", and turn on Mic Mix in SoundDeck.");
             lines.Insert(0, "SoundDeck is open now. Look for its orange icon near the clock.");
             lines.AddRange(inst.Warnings);
             status.Text = string.Join("\n\n", lines);

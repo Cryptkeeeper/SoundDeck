@@ -26,7 +26,7 @@ namespace SoundDeck
         static readonly TestItem[] TestItems =
         {
             new TestItem("Voice effects", "fx.each", "1.8.0", "Try each voice effect", "Turn on Mic Mix and Hear yourself, then pick each effect on the Effects page and talk. Each should sound clean, with no crackles or sudden loud bits."),
-            new TestItem("Voice effects", "fx.friends", "1.8.0", "Friends hear the effect", "Ask someone in Discord: they should hear the effect while it's on, and your normal voice when it's off."),
+            new TestItem("Voice effects", "fx.friends", "1.8.0", "Friends hear the effect", "Ask someone in Harmony: they should hear the effect while it's on, and your normal voice when it's off."),
             new TestItem("Voice effects", "fx.strength", "1.8.0", "Strength slider", "Move Strength while talking. The effect should get stronger or weaker smoothly."),
             new TestItem("Voice effects", "fx.hotkey", "1.8.0", "Effect hotkey", "Pick a hotkey on the Effects page and press it while a game is focused. The effect should switch on and off."),
 
@@ -40,7 +40,7 @@ namespace SoundDeck
             new TestItem("Microphone", "mic.ptt", "1.7.0", "Push-to-talk", "Set a push-to-talk key. Friends should only hear you while it's held, including while a game is focused."),
 
             new TestItem("Streaming", "mon.stream", "1.8.0", "Listen to your stream", "On the Streaming page, turn on Listen with \"What your stream hears\". You should hear your stream's mix in your headset."),
-            new TestItem("Streaming", "mon.discord", "1.8.0", "Listen to what Discord hears", "Switch Listen to \"What Discord hears\". You should hear what your friends hear from you."),
+            new TestItem("Streaming", "mon.discord", "1.8.0", "Listen to what Harmony hears", "Switch Listen to \"What Harmony hears\". You should hear what your friends hear from you."),
             new TestItem("Streaming", "mon.voice", "1.8.0", "Include my voice", "Tick \"Include my voice\" while listening. You should hear yourself, slightly late."),
 
             new TestItem("Stream Deck", "sd.update", "1.8.0", "New keys showed up", "In the Stream Deck app, the SoundDeck list should have Voice effect, Bleep and Listen to stream, without reinstalling anything."),

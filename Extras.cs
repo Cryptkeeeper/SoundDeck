@@ -43,7 +43,7 @@ namespace SoundDeck
                     Missing = () => !EqApo.Installed, Install = InstallApoNow },
                 new Extra {
                     Key = "vbcable", Name = "Virtual mic (VB-CABLE)", NeedsRestart = true,
-                    Why = "Needed for Mic Mix, the soundboard in Discord, voice effects and the bleep. 1 MB from vb-audio.com. Windows asks permission, then click Install Driver.",
+                    Why = "Needed for Mic Mix, the soundboard in Harmony, voice effects and the bleep. 1 MB from vb-audio.com. Windows asks permission, then click Install Driver.",
                     Missing = () => FindCable() == null, Install = InstallVbCable },
                 new Extra {
                     Key = "goxutil", Name = "GoXLR control (GoXLR Utility)",

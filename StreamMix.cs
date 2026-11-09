@@ -242,7 +242,7 @@ namespace SoundDeck
 
             stColChatMute = Btn(card, "", 12, 250, 156, 28);
             stColChatMute.Click += (s, e) => ToggleChatMute();
-            tips.SetToolTip(stColChatMute, "Mutes you in Discord only. Your stream still hears you.");
+            tips.SetToolTip(stColChatMute, "Mutes you in Harmony only. Your stream still hears you.");
 
             Lbl(card, "On stream", 14, 292, 8.5f, false, Dim);
             streamZone = NewZone(card, 312, 270);
