@@ -47,7 +47,7 @@ namespace SoundDeck
                     Missing = () => FindCable() == null, Install = InstallVbCable },
                 new Extra {
                     Key = "goxutil", Name = "GoXLR control (GoXLR Utility)",
-                    Why = "Lets SoundDeck control your GoXLR's faders, mutes and mic. 44 MB from GitHub. Close TC-Helicon's GoXLR App first: only one can run.",
+                    Why = "Lets SoundDeck control your GoXLR's faders, mutes and mic (free GoXLR Utility, 44 MB). Windows asks permission once, then it runs hidden. Close TC-Helicon's GoXLR App first.",
                     Missing = () => HasGoXlr && !GoxUtilityInstalled(), Install = InstallGoxNow },
             };
         }
@@ -245,13 +245,7 @@ namespace SoundDeck
 
         static void InstallGoxNow(Action<string> say)
         {
-            var exe = DownloadChecked("https://github.com/GoXLR-on-Linux/goxlr-utility/releases/download/v1.2.4/goxlr-utility-1.2.4.exe",
-                "0A8743D27EA5D1741956AECFC3AE26C0F7399945CF29D2BB6B3DAB459E86AC2F");
-            string tmp = Path.Combine(Path.GetTempPath(), "goxlr-utility-1.2.4.exe");
-            File.WriteAllBytes(tmp, exe);
-            say("Opening the GoXLR Utility installer. Follow its steps...");
-            Process.Start(new ProcessStartInfo(tmp) { UseShellExecute = true }).WaitForExit();
-            try { File.Delete(tmp); } catch { }
+            GoxUtil.Install(say);
         }
 
         // The installer's Settings > Apps entry remembers what SoundDeck installed, for a clean uninstall.

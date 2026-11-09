@@ -1944,6 +1944,7 @@ namespace SoundDeck
             TickStreaming();
             TickStreamMonitor();
             TickEffectsStatus();
+            TickGoxAutostart();
             TickProfiles();
             LoadMicColumn();
             Settings.SaveIfDirty();

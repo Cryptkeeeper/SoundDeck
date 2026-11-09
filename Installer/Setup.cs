@@ -199,6 +199,17 @@ namespace SoundDeckSetup
             return Process.GetProcessesByName("goxlr-daemon").Length > 0;
         }
 
+        // TC-Helicon's own GoXLR App (GoXLR Utility's programs are all named "goxlr-...").
+        public static bool GoxOfficialAppRunning()
+        {
+            foreach (var p in Process.GetProcesses())
+            {
+                string n = p.ProcessName;
+                if (n.StartsWith("goxlr", StringComparison.OrdinalIgnoreCase) && !n.StartsWith("goxlr-", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
         public static string StreamDeckExe()
         {
             string p = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Elgato\StreamDeck\StreamDeck.exe");
@@ -347,16 +358,20 @@ namespace SoundDeckSetup
             }
 
             bool goxPresent = Detect.Mics().Any(m => m.IndexOf("GoXLR", StringComparison.OrdinalIgnoreCase) >= 0 || m.IndexOf("GO XLR", StringComparison.OrdinalIgnoreCase) >= 0);
-            if (o.GoxUtil && goxPresent && !Detect.GoxUtilityInstalled())
+            if (o.GoxUtil && goxPresent && !Detect.GoxUtilityInstalled() && Detect.GoxOfficialAppRunning())
+                Warnings.Add("GoXLR control wasn't added because TC-Helicon's GoXLR App is open (only one can control the GoXLR). Close it, then use \"Add GoXLR control\" on SoundDeck's Settings page.");
+            else if (o.GoxUtil && goxPresent && !Detect.GoxUtilityInstalled())
             {
                 try
                 {
                     var exe = Download(GoxUrl, GoxSha, "GoXLR Utility", 72, 80);
                     string tmp = Path.Combine(Path.GetTempPath(), "goxlr-utility-1.2.4.exe");
                     File.WriteAllBytes(tmp, exe);
-                    report(80, "Opening the GoXLR Utility installer. Follow its steps...");
-                    Process.Start(new ProcessStartInfo(tmp) { UseShellExecute = true }).WaitForExit();
+                    report(80, "Installing GoXLR Utility. Click Yes when Windows asks...");
+                    // /S = silent, none of its own setup screens. SoundDeck starts it (hidden) when it runs.
+                    Process.Start(new ProcessStartInfo(tmp, "/S") { Verb = "runas", UseShellExecute = true }).WaitForExit();
                     try { File.Delete(tmp); } catch { }
+                    if (!Detect.GoxUtilityInstalled()) throw new Exception("its setup didn't finish");
                 }
                 catch (System.ComponentModel.Win32Exception) { Warnings.Add("GoXLR Utility wasn't installed because Windows permission was declined."); }
                 catch (Exception ex) { Warnings.Add("GoXLR Utility wasn't installed: " + ex.Message); }

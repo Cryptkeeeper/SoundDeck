@@ -49,6 +49,8 @@ namespace SoundDeck
             new TestItem("Stream Deck", "sd.mon", "1.8.0", "Listen to stream key", "Press it: Listen turns on (the key changes) and you hear your stream. Press again to stop."),
             new TestItem("Stream Deck", "sd.old", "1.7.0", "Older keys still work", "Volume dials, mute, output and profile keys still do what they did before."),
 
+            new TestItem("GoXLR", "gox.install", "1.8.6", "Add GoXLR control", "Close TC-Helicon's GoXLR App, then on the Settings page click Add GoXLR control. Windows should ask permission once, with no other setup windows, and it should say Connected within a minute."),
+            new TestItem("GoXLR", "gox.auto", "1.8.6", "Starts by itself", "Restart the PC (or quit GoXLR Utility from its tray icon and reopen SoundDeck). SoundDeck should connect to the GoXLR again on its own."),
             new TestItem("GoXLR", "gox.setup", "1.7.0", "Set up GoXLR", "On the Settings page, click Set up GoXLR. SoundDeck's channels should go to the GoXLR's channels."),
             new TestItem("GoXLR", "gox.faders", "1.7.0", "Faders and mute buttons", "With GoXLR Utility running, moving a GoXLR fader or mute button should change the SoundDeck channel, and the other way around."),
 
