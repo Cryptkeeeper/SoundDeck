@@ -54,6 +54,7 @@ namespace SoundDeck
             new TestItem("GoXLR", "gox.setup", "1.7.0", "Set up GoXLR", "On the Settings page, click Set up GoXLR. SoundDeck's channels should go to the GoXLR's channels."),
             new TestItem("GoXLR", "gox.faders", "1.7.0", "Faders and mute buttons", "With GoXLR Utility running, moving a GoXLR fader or mute button should change the SoundDeck channel, and the other way around."),
 
+            new TestItem("Setup and updates", "setup.page", "1.8.8", "Setup page", "Open the Setup page. Each step should show the right tick or warning for your PC, and its button should do what it says. Steps you finish elsewhere should tick off within a second or two."),
             new TestItem("Setup and updates", "setup.fresh", "1.8.2", "Fresh setup", "Run SoundDeck-Setup.exe on a PC that doesn't have SoundDeck. It should finish and start SoundDeck, even if it asks you to restart part way."),
             new TestItem("Setup and updates", "setup.extras", "1.8.1", "Missing extras offered", "Settings > Check for updates. If noise removal, Equalizer APO, VB-CABLE or GoXLR Utility is missing, it should offer to install it."),
             new TestItem("Setup and updates", "upd.auto", "1.8.4", "Updated by itself", "This version arrived through the update check, and the What's new window showed afterwards."),

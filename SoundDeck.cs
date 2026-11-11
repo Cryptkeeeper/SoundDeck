@@ -652,6 +652,7 @@ namespace SoundDeck
             BuildGoXlr(pages["Settings"]);
             BuildGoxLinkUi(pages["Settings"]);
             StartGoxPolling();
+            BuildSetup();
             BuildTesting(); // TEMPORARY: see Testing.cs
 
             RefreshDevices(true);
@@ -660,7 +661,8 @@ namespace SoundDeck
             UpdateApoStatus();
             // Testing aid: SOUNDDECK_PAGE=<page name> opens that page instead of the Mixer.
             string startPage = Environment.GetEnvironmentVariable("SOUNDDECK_PAGE");
-            ShowPage(startPage != null && pages.ContainsKey(startPage) ? startPage : "Mixer");
+            // A fresh install opens on Setup; after that, the Mixer.
+            ShowPage(startPage != null && pages.ContainsKey(startPage) ? startPage : Settings.Existed ? "Mixer" : "Setup");
 
             tick = new Timer { Interval = 1000 };
             tick.Tick += (s, e) => OnTick();
@@ -746,7 +748,7 @@ namespace SoundDeck
             nav.Controls.Add(logo);
             Lbl(nav, "SoundDeck", 52, 23, 13f, true, Fg);
 
-            string[] names = { "Mixer", "Equalizer", "Microphone", "Mic Mix", "Streaming", "Soundboard", "Effects", "Ducking", "Profiles", "Settings", "Testing" };
+            string[] names = { "Setup", "Mixer", "Equalizer", "Microphone", "Mic Mix", "Streaming", "Soundboard", "Effects", "Ducking", "Profiles", "Settings", "Testing" };
             for (int i = 0; i < names.Length; i++)
             {
                 string name = names[i];
@@ -789,6 +791,7 @@ namespace SoundDeck
             }
             if (name == "Microphone") LoadMicLevel();
             if (name == "Equalizer" || name == "Microphone") UpdateApoStatus();
+            if (name == "Setup") UpdateSetup();
         }
 
         // ---------- Mixer ----------
@@ -1767,6 +1770,7 @@ namespace SoundDeck
         {
             var p = NewPage("Settings", "Settings", "How SoundDeck starts, updates, and which devices it shows.");
             var startup = Chk(p, "Start SoundDeck when Windows starts", 25, 96);
+            settingsStartup = startup;
             startup.Checked = IsStartupOn();
             startup.CheckedChanged += (s, e) => SetStartup(startup.Checked);
 
@@ -1945,6 +1949,7 @@ namespace SoundDeck
             TickStreamMonitor();
             TickEffectsStatus();
             TickGoxAutostart();
+            if (pages["Setup"].Visible) UpdateSetup();
             TickProfiles();
             LoadMicColumn();
             Settings.SaveIfDirty();
