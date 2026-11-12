@@ -182,22 +182,35 @@ namespace SoundDeck
             get { if (en == null) en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom(); return en; }
         }
 
+        // Lets go of a Windows audio object right away instead of waiting for .NET's clean-up to get to it.
+        // These are looked up every second, and each one holds a few system handles until it's released.
+        static void Rel(object o)
+        {
+            try { if (o != null && Marshal.IsComObject(o)) Marshal.ReleaseComObject(o); } catch { }
+        }
+
         public static List<AudioDevice> GetDevices(EDataFlow flow)
         {
             var list = new List<AudioDevice>();
+            IMMDeviceCollection col = null;
             try
             {
-                IMMDeviceCollection col;
                 E.EnumAudioEndpoints((int)flow, 1, out col);
                 int n; col.GetCount(out n);
                 for (int i = 0; i < n; i++)
                 {
-                    IMMDevice d; col.Item(i, out d);
-                    string id; d.GetId(out id);
-                    list.Add(new AudioDevice(id, GetName(d)));
+                    IMMDevice d = null;
+                    try
+                    {
+                        col.Item(i, out d);
+                        string id; d.GetId(out id);
+                        list.Add(new AudioDevice(id, GetName(d)));
+                    }
+                    finally { Rel(d); }
                 }
             }
             catch { }
+            finally { Rel(col); }
             // Testing aid: SOUNDDECK_FAKE_GOXLR=1 pretends a GoXLR is plugged in (outputs only).
             if (flow == EDataFlow.Render && Environment.GetEnvironmentVariable("SOUNDDECK_FAKE_GOXLR") == "1")
                 foreach (var ch in new[] { "System", "Game", "Chat", "Music", "Sample" })
@@ -207,9 +220,10 @@ namespace SoundDeck
 
         static string GetName(IMMDevice d)
         {
+            IPropertyStore ps = null;
             try
             {
-                IPropertyStore ps; d.OpenPropertyStore(0, out ps);
+                d.OpenPropertyStore(0, out ps);
                 PropertyKey k = PKEY_FriendlyName; PropVariant v;
                 ps.GetValue(ref k, out v);
                 string s = v.vt == 31 ? Marshal.PtrToStringUni(v.p1) : null;
@@ -217,13 +231,16 @@ namespace SoundDeck
                 if (!string.IsNullOrEmpty(s)) return s;
             }
             catch { }
+            finally { Rel(ps); }
             return "Unknown device";
         }
 
         public static string GetDefaultId(EDataFlow flow)
         {
-            try { IMMDevice d; E.GetDefaultAudioEndpoint((int)flow, 0, out d); string id; d.GetId(out id); return id; }
+            IMMDevice d = null;
+            try { E.GetDefaultAudioEndpoint((int)flow, 0, out d); string id; d.GetId(out id); return id; }
             catch { return null; }
+            finally { Rel(d); }
         }
 
         public static void SetDefault(string id)
@@ -236,34 +253,42 @@ namespace SoundDeck
             catch { }
         }
 
-        static IAudioEndpointVolume EndpointVolume(string id)
+        // Runs one action on a device's volume control, then lets go of it. Throws if the device is gone.
+        static void WithEndpointVolume(string id, Action<IAudioEndpointVolume> use)
         {
-            IMMDevice d; E.GetDevice(id, out d);
-            Guid g = IID_EndpointVolume; object o;
-            d.Activate(ref g, CLSCTX_ALL, IntPtr.Zero, out o);
-            return (IAudioEndpointVolume)o;
+            IMMDevice d = null; object o = null;
+            try
+            {
+                E.GetDevice(id, out d);
+                Guid g = IID_EndpointVolume;
+                d.Activate(ref g, CLSCTX_ALL, IntPtr.Zero, out o);
+                use((IAudioEndpointVolume)o);
+            }
+            finally { Rel(o); Rel(d); }
         }
 
         public static float GetVolume(string id)
         {
-            try { float v; EndpointVolume(id).GetMasterVolumeLevelScalar(out v); return v; }
+            float v = -1;
+            try { WithEndpointVolume(id, ev => ev.GetMasterVolumeLevelScalar(out v)); return v; }
             catch { return -1; }
         }
 
         public static void SetVolume(string id, float v)
         {
-            try { EndpointVolume(id).SetMasterVolumeLevelScalar(v, ref Ctx); } catch { }
+            try { WithEndpointVolume(id, ev => ev.SetMasterVolumeLevelScalar(v, ref Ctx)); } catch { }
         }
 
         public static bool GetMute(string id)
         {
-            try { bool m; EndpointVolume(id).GetMute(out m); return m; }
+            bool m = false;
+            try { WithEndpointVolume(id, ev => ev.GetMute(out m)); return m; }
             catch { return false; }
         }
 
         public static void SetMute(string id, bool m)
         {
-            try { EndpointVolume(id).SetMute(m, ref Ctx); } catch { }
+            try { WithEndpointVolume(id, ev => ev.SetMute(m, ref Ctx)); } catch { }
         }
 
         static Dictionary<uint, string> exeCache = new Dictionary<uint, string>();
@@ -278,15 +303,17 @@ namespace SoundDeck
                 if (exeCache.Count > 500) exeCache.Clear();
                 try
                 {
-                    var p = Process.GetProcessById((int)pid);
-                    exe = p.ProcessName.ToLowerInvariant();
-                    if (!prettyCache.ContainsKey(exe))
+                    using (var p = Process.GetProcessById((int)pid))
                     {
-                        string desc = null;
-                        try { desc = p.MainModule.FileVersionInfo.FileDescription; } catch { }
-                        if (string.IsNullOrWhiteSpace(desc) || desc.Length > 40)
-                            desc = char.ToUpper(p.ProcessName[0]) + p.ProcessName.Substring(1);
-                        prettyCache[exe] = desc.Trim();
+                        exe = p.ProcessName.ToLowerInvariant();
+                        if (!prettyCache.ContainsKey(exe))
+                        {
+                            string desc = null;
+                            try { desc = p.MainModule.FileVersionInfo.FileDescription; } catch { }
+                            if (string.IsNullOrWhiteSpace(desc) || desc.Length > 40)
+                                desc = char.ToUpper(p.ProcessName[0]) + p.ProcessName.Substring(1);
+                            prettyCache[exe] = desc.Trim();
+                        }
                     }
                 }
                 catch { exe = null; }
@@ -296,25 +323,31 @@ namespace SoundDeck
             return exe;
         }
 
+        static uint selfPid;
+
         public static List<AppSession> GetSessions()
         {
             var result = new List<AppSession>();
-            uint self = (uint)Process.GetCurrentProcess().Id;
+            if (selfPid == 0) using (var me = Process.GetCurrentProcess()) selfPid = (uint)me.Id;
+            uint self = selfPid;
             foreach (var dev in GetDevices(EDataFlow.Render))
             {
+                IMMDevice d = null; object o = null; IAudioSessionEnumerator se = null;
                 try
                 {
-                    IMMDevice d; E.GetDevice(dev.Id, out d);
-                    Guid g = IID_SessionManager2; object o;
+                    E.GetDevice(dev.Id, out d);
+                    Guid g = IID_SessionManager2;
                     d.Activate(ref g, CLSCTX_ALL, IntPtr.Zero, out o);
-                    IAudioSessionEnumerator se;
                     ((IAudioSessionManager2)o).GetSessionEnumerator(out se);
                     int n; se.GetCount(out n);
                     for (int i = 0; i < n; i++)
                     {
+                        // A session that goes into the list is kept (its volume and meter are used until the next
+                        // scan); the ones that are skipped are let go of here.
+                        IAudioSessionControl2 c = null; bool keep = false;
                         try
                         {
-                            IAudioSessionControl2 c; se.GetSession(i, out c);
+                            se.GetSession(i, out c);
                             int state; c.GetState(out state);
                             if (state == 2) continue;                    // expired
                             if (c.IsSystemSoundsSession() == 0) continue;
@@ -324,11 +357,14 @@ namespace SoundDeck
                             string exe = ExeName(pid, out pretty);
                             if (exe == null || exe == "audiodg") continue;
                             result.Add(new AppSession { Pid = pid, Exe = exe, Pretty = pretty ?? exe, Volume = (ISimpleAudioVolume)c, Meter = c as IAudioMeterInformation });
+                            keep = true;
                         }
                         catch { }
+                        finally { if (!keep) Rel(c); }
                     }
                 }
                 catch { }
+                finally { Rel(se); Rel(o); Rel(d); }
             }
             return result;
         }
@@ -631,6 +667,7 @@ namespace SoundDeck
                 if (Settings.Get("side.vk", null) == null) { Settings.Set("side.vk", (int)Keys.H); Settings.Set("side.mods", 3); }
             }
 
+            Current = this;
             BuildShell();
             BuildMixer();
             BuildEq();
@@ -710,6 +747,7 @@ namespace SoundDeck
                 return;
             }
             Settings.Save();
+            RestoreRealMic(); // the virtual mic goes silent once Mic Mix stops
             mixEngine.Stop();
             sideEngine.Stop();
             boardLocal.Stop();
@@ -1024,6 +1062,9 @@ namespace SoundDeck
             else if (p[0] == "streammon") ToggleStreamMonitor();
             else if (p[0] == "ptt" && p.Length == 2) pttDeckHeld = p[1] == "down";
             else if (p[0] == "update" && !Updater.IsDevCopy) { autoInstallUpdate = true; CheckForUpdates(false); }
+            // Setup asks SoundDeck to close this way before replacing or removing it, so it shuts down properly
+            // (settings saved, Windows mic handed back) instead of being cut off.
+            else if (p[0] == "quit") ExitApp();
         }
 
         // Virtual devices (Sonar, Steam, VB-CABLE) are skipped when cycling outputs from the Stream Deck.
@@ -1382,8 +1423,6 @@ namespace SoundDeck
         void InstallApo()
         {
             if (apoInstalling) return;
-            const string url = "https://downloads.sourceforge.net/project/equalizerapo/1.4.2/EqualizerAPO-x64-1.4.2.exe";
-            const string sha = "7403BE7427BBE1936A40DDED082829B6E217FC4F5990FEE5CBA501F0AE055AFA"; // matches Chocolatey's published hash
             apoInstalling = true;
             foreach (var l in new[] { eqStatus, micStatus }) { l.Text = "Downloading Equalizer APO (11 MB)..."; l.ForeColor = Dim; ((Control)l.Tag).Enabled = false; }
             var t = new System.Threading.Thread(() =>
@@ -1391,25 +1430,8 @@ namespace SoundDeck
                 string err = null;
                 try
                 {
-                    System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
-                    byte[] data;
-                    using (var wc = new System.Net.WebClient()) { wc.Headers.Add("User-Agent", "SoundDeck/" + AppVersion.Value); data = wc.DownloadData(url); }
-                    string got;
-                    using (var h = System.Security.Cryptography.SHA256.Create()) got = BitConverter.ToString(h.ComputeHash(data)).Replace("-", "");
-                    if (!got.Equals(sha, StringComparison.OrdinalIgnoreCase)) throw new Exception("the download didn't match the expected file, so it wasn't used");
-                    string tmp = Path.Combine(Path.GetTempPath(), "EqualizerAPO-x64-1.4.2.exe");
-                    File.WriteAllBytes(tmp, data);
-                    BeginInvoke(new Action(() => { foreach (var l in new[] { eqStatus, micStatus }) l.Text = "Installing. Click Yes when Windows asks, then tick your headset and mic in the window that opens."; }));
-                    Process.Start(new ProcessStartInfo(tmp, "/S") { Verb = "runas", UseShellExecute = true }).WaitForExit();
-                    try { File.Delete(tmp); } catch { }
-                    if (!EqApo.Installed) throw new Exception("its setup didn't finish");
-                    System.Threading.Thread.Sleep(2000);
-                    string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "EqualizerAPO");
-                    if (Process.GetProcessesByName("DeviceSelector").Length == 0 && Process.GetProcessesByName("Configurator").Length == 0)
-                    {
-                        string sel = Path.Combine(dir, File.Exists(Path.Combine(dir, "DeviceSelector.exe")) ? "DeviceSelector.exe" : "Configurator.exe");
-                        if (File.Exists(sel)) try { Process.Start(new ProcessStartInfo(sel) { Verb = "runas", UseShellExecute = true }); } catch { }
-                    }
+                    // The same install as the "missing parts" window (Extras.cs); progress goes to the page's status lines.
+                    InstallApoNow(text => { try { BeginInvoke(new Action(() => { foreach (var l in new[] { eqStatus, micStatus }) l.Text = text; })); } catch { } });
                 }
                 catch (System.ComponentModel.Win32Exception) { err = "Windows permission was declined, so Equalizer APO wasn't installed."; }
                 catch (Exception ex) { err = "Couldn't install Equalizer APO: " + ex.Message; }
@@ -1564,10 +1586,12 @@ namespace SoundDeck
             mixBeep.Checked = Settings.GetBool("mix.beep", true);
             mixBeep.CheckedChanged += (s, e) => Settings.Set("mix.beep", mixBeep.Checked);
 
-            mixEngineStatus = Lbl(p, "", 25, 478, 9.5f, true, Dim);
+            BuildMicAsDefault(p, 478); // see SetupPage.cs
 
-            Lbl(p, "One-time setup", 22, 516, 12f, true, Fg);
-            steps = Lbl(p, "", 25, 546, 9.5f, false, Dim);
+            mixEngineStatus = Lbl(p, "", 25, 534, 9.5f, true, Dim);
+
+            Lbl(p, "One-time setup", 22, 572, 12f, true, Fg);
+            steps = Lbl(p, "", 25, 602, 9.5f, false, Dim);
             steps.MaximumSize = new Size(800, 0);
 
             UpdateMixGains();
@@ -1694,11 +1718,13 @@ namespace SoundDeck
         {
             if (mixOn == null) return;
             var cable = FindCable();
+            // With "Make the virtual mic my Windows mic" ticked, apps only need to be on Default.
+            string pickMic = MicAsDefault ? "Default" : "\"" + DiscordInputName(cable) + "\"";
             mixCableStatus.Text = cable == null
                 ? "Mic Mix needs a virtual mic. Install Steam (it includes one) or VB-CABLE (free, no ads), restart your PC, then come back here."
-                : "Ready. In Harmony, set your microphone to \"" + DiscordInputName(cable) + "\".";
+                : "Ready. In Harmony, set your microphone to " + pickMic + ".";
             steps.Text =
-                "1.  In Harmony's voice settings, set your microphone (input device) to \"" + DiscordInputName(cable) + "\".\n" +
+                "1.  In Harmony's voice settings, set your microphone (input device) to " + pickMic + ".\n" +
                 "2.  Tick \"Turn on Mic Mix\" above. Keep SoundDeck running, because your Harmony mic now goes through it.\n" +
                 "3.  Put Spotify, your browser, etc. in the Media channel on the Mixer page.\n" +
                 (IsSteamCable(cable) ? "Steam's virtual mic is already on your PC, so there's nothing else to install." : "");
@@ -1944,6 +1970,7 @@ namespace SoundDeck
             UpdateAppsList();
             ApplyMixer();
             TickMicMix();
+            TickDefaultMic();
             TickHearYourself();
             TickStreaming();
             TickStreamMonitor();
@@ -2101,6 +2128,8 @@ namespace SoundDeck
                     "\r\n" + (ex == null ? "unknown error" : ex.ToString()) + "\r\n\r\n");
             }
             catch { }
+            // About to close: hand the Windows mic back to the real one first, so the user isn't left silent.
+            if (fatal) { try { if (MainForm.Current != null) MainForm.Current.RestoreRealMic(); } catch { } }
             if (crashShown) return;
             crashShown = true;
             try

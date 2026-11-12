@@ -47,6 +47,7 @@ namespace SoundDeck
             new TestItem("Stream Deck", "sd.fx", "1.8.0", "Voice effect key", "Press it: the effect turns on and the key lights up. Press again to turn it off."),
             new TestItem("Stream Deck", "sd.bleep", "1.8.0", "Bleep key", "Hold it while talking: you should be bleeped until you let go."),
             new TestItem("Stream Deck", "sd.mon", "1.8.0", "Listen to stream key", "Press it: Listen turns on (the key changes) and you hear your stream. Press again to stop."),
+            new TestItem("Stream Deck", "sd.install", "1.8.9", "Add the plugin from Setup", "Only if SoundDeck's keys aren't in the Stream Deck app yet: on the Setup page, click Install next to Stream Deck plugin. The Stream Deck app should close, reopen and list SoundDeck's keys."),
             new TestItem("Stream Deck", "sd.old", "1.7.0", "Older keys still work", "Volume dials, mute, output and profile keys still do what they did before."),
 
             new TestItem("GoXLR", "gox.install", "1.8.6", "Add GoXLR control", "Close TC-Helicon's GoXLR App, then on the Settings page click Add GoXLR control. Windows should ask permission once, with no other setup windows, and it should say Connected within a minute."),
@@ -56,7 +57,8 @@ namespace SoundDeck
 
             new TestItem("Setup and updates", "setup.page", "1.8.8", "Setup page", "Open the Setup page. Each step should show the right tick or warning for your PC, and its button should do what it says. Steps you finish elsewhere should tick off within a second or two."),
             new TestItem("Setup and updates", "setup.fresh", "1.8.2", "Fresh setup", "Run SoundDeck-Setup.exe on a PC that doesn't have SoundDeck. It should finish and start SoundDeck, even if it asks you to restart part way."),
-            new TestItem("Setup and updates", "setup.extras", "1.8.1", "Missing extras offered", "Settings > Check for updates. If noise removal, Equalizer APO, VB-CABLE or GoXLR Utility is missing, it should offer to install it."),
+            new TestItem("Setup and updates", "setup.extras", "1.8.9", "Missing extras install", "Settings > Check for updates. If noise removal, Equalizer APO, VB-CABLE or GoXLR Utility is missing, it should offer to install it. Install one: Windows should ask permission and it should finish without an error."),
+            new TestItem("Setup and updates", "setup.micback", "1.8.9", "Mic comes back when SoundDeck closes", "With step 4 on the Setup page done, join a call and quit SoundDeck from its tray icon. Friends should still hear you (your normal mic). Open SoundDeck again: within a few seconds they should hear you through SoundDeck."),
             new TestItem("Setup and updates", "upd.auto", "1.8.4", "Updated by itself", "This version arrived through the update check, and the What's new window showed afterwards."),
             new TestItem("Setup and updates", "upd.hotkeys", "1.8.4", "Hotkeys kept", "Hotkeys you had set before updating still work."),
 

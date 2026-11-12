@@ -221,16 +221,7 @@ namespace SoundDeckSetup
 
     class Installer
     {
-        const string RnNoiseUrl = "https://github.com/werman/noise-suppression-for-voice/releases/download/v1.10/win-rnnoise.zip";
-        const string RnNoiseSha = "E4DCC186102850F8DCEBEB766AD1BF34C24F6280BD614EF84B72DAE4783FC517";
-        // Equalizer APO is unsigned; this hash matches the one Chocolatey publishes for the same file.
-        const string ApoUrl = "https://downloads.sourceforge.net/project/equalizerapo/1.4.2/EqualizerAPO-x64-1.4.2.exe";
-        const string ApoSha = "7403BE7427BBE1936A40DDED082829B6E217FC4F5990FEE5CBA501F0AE055AFA";
-        // GoXLR Utility (open source); hash is the SHA-256 GitHub publishes for this release file.
-        const string GoxUrl = "https://github.com/GoXLR-on-Linux/goxlr-utility/releases/download/v1.2.4/goxlr-utility-1.2.4.exe";
-        const string GoxSha = "0A8743D27EA5D1741956AECFC3AE26C0F7399945CF29D2BB6B3DAB459E86AC2F";
-        const string VbCableUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip";
-        const string VbCableSha = "BC44E8974191A5A2427D6C979E2DAB08DBB09925F3F435DFA2F0BA3E45B6EB90";
+        // Where each add-on comes from, its expected SHA-256 and how its installer is run: see ..\Addons.cs.
         public const string PluginId = "com.sounddeck.controls.sdPlugin";
         public const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\SoundDeck";
 
@@ -253,7 +244,7 @@ namespace SoundDeckSetup
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             report(2, "Closing SoundDeck if it's running...");
-            foreach (var p in Process.GetProcessesByName("SoundDeck")) { try { p.Kill(); p.WaitForExit(3000); } catch { } }
+            CloseSoundDeck();
 
             report(5, "Copying SoundDeck...");
             Directory.CreateDirectory(o.Dir);
@@ -268,22 +259,11 @@ namespace SoundDeckSetup
                 report(48, "Noise removal is already installed.");
             else if (o.Noise)
             {
-                string dll = Path.Combine(o.Dir, "rnnoise_mono.dll");
                 try
                 {
-                    var zip = Download(RnNoiseUrl, RnNoiseSha, "noise removal (RNNoise)", 10, 48);
+                    var zip = Download(Addons.RnNoiseUrl, Addons.RnNoiseSha, "noise removal (RNNoise)", 10, 48);
                     report(49, "Unpacking noise removal...");
-                    using (var z = new ZipArchive(new MemoryStream(zip)))
-                    {
-                        var entry = z.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').EndsWith("vst/rnnoise_mono.dll", StringComparison.OrdinalIgnoreCase));
-                        if (entry == null) throw new Exception("rnnoise_mono.dll wasn't in the download");
-                        entry.ExtractToFile(dll, true);
-                        var lic = z.Entries.FirstOrDefault(e => e.Name.Equals("LICENSE", StringComparison.OrdinalIgnoreCase));
-                        if (lic != null) lic.ExtractToFile(Path.Combine(o.Dir, "RNNoise-LICENSE.txt"), true);
-                    }
-                    File.WriteAllText(Path.Combine(o.Dir, "RNNoise-README.txt"),
-                        "Noise removal uses rnnoise_mono.dll from the open-source project\r\nhttps://github.com/werman/noise-suppression-for-voice (release v1.10).\r\n" +
-                        "It was downloaded from that project's GitHub release during setup. Source code is available there.\r\n");
+                    Addons.UnpackRnNoise(zip, o.Dir, "during setup");
                 }
                 catch (Exception ex) { Warnings.Add("Noise removal wasn't installed: " + ex.Message); }
             }
@@ -334,13 +314,9 @@ namespace SoundDeckSetup
             {
                 try
                 {
-                    var exe = Download(ApoUrl, ApoSha, "equalizer (Equalizer APO)", 60, 70);
-                    string tmp = Path.Combine(Path.GetTempPath(), "EqualizerAPO-x64-1.4.2.exe");
-                    File.WriteAllBytes(tmp, exe);
+                    var exe = Download(Addons.ApoUrl, Addons.ApoSha, "equalizer (Equalizer APO)", 60, 70);
                     report(71, "Installing Equalizer APO. Click Yes when Windows asks...");
-                    var p = Process.Start(new ProcessStartInfo(tmp, "/S") { Verb = "runas", UseShellExecute = true });
-                    p.WaitForExit();
-                    try { File.Delete(tmp); } catch { }
+                    Addons.RunElevated(exe, Addons.ApoFile, "/S");
                     if (Detect.ApoDir() == null) throw new Exception("its setup didn't finish");
                     ApoInstalled = true; NeedsRestart = true;
                     MarkByUs("ApoByUs");
@@ -364,13 +340,10 @@ namespace SoundDeckSetup
             {
                 try
                 {
-                    var exe = Download(GoxUrl, GoxSha, "GoXLR Utility", 72, 80);
-                    string tmp = Path.Combine(Path.GetTempPath(), "goxlr-utility-1.2.4.exe");
-                    File.WriteAllBytes(tmp, exe);
+                    var exe = Download(Addons.GoxUrl, Addons.GoxSha, "GoXLR Utility", 72, 80);
                     report(80, "Installing GoXLR Utility. Click Yes when Windows asks...");
                     // /S = silent, none of its own setup screens. SoundDeck starts it (hidden) when it runs.
-                    Process.Start(new ProcessStartInfo(tmp, "/S") { Verb = "runas", UseShellExecute = true }).WaitForExit();
-                    try { File.Delete(tmp); } catch { }
+                    Addons.RunElevated(exe, Addons.GoxFile, "/S");
                     if (!Detect.GoxUtilityInstalled()) throw new Exception("its setup didn't finish");
                 }
                 catch (System.ComponentModel.Win32Exception) { Warnings.Add("GoXLR Utility wasn't installed because Windows permission was declined."); }
@@ -381,16 +354,9 @@ namespace SoundDeckSetup
             {
                 try
                 {
-                    var zip = Download(VbCableUrl, VbCableSha, "virtual mic (VB-CABLE)", 82, 88);
-                    string dir = Path.Combine(o.Dir, "VBCABLE");
-                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
-                    using (var z = new ZipArchive(new MemoryStream(zip))) z.ExtractToDirectory(dir);
+                    var zip = Download(Addons.VbCableUrl, Addons.VbCableSha, "virtual mic (VB-CABLE)", 82, 88);
                     report(89, "Opening the VB-CABLE installer. Click Yes, then \"Install Driver\"...");
-                    var psi = new ProcessStartInfo(Path.Combine(dir, "VBCABLE_Setup_x64.exe")) { Verb = "runas", UseShellExecute = true, WorkingDirectory = dir };
-                    var p = Process.Start(psi);
-                    VbCableStarted = true;
-                    MarkByUs("VBCableByUs");
-                    p.WaitForExit();
+                    Addons.RunVbCableSetup(zip, Path.Combine(o.Dir, "VBCABLE"), () => { VbCableStarted = true; MarkByUs("VBCableByUs"); });
                     NeedsRestart = true;
                 }
                 catch (System.ComponentModel.Win32Exception) { Warnings.Add("VB-CABLE wasn't installed because Windows permission was declined. You can run SoundDeckSetup.exe again anytime."); }
@@ -469,10 +435,28 @@ namespace SoundDeckSetup
                 done.WaitOne();
             }
             if (err != null) throw new Exception("couldn't download it (" + err.Message + ")");
-            string got;
-            using (var h = SHA256.Create()) got = BitConverter.ToString(h.ComputeHash(data)).Replace("-", "");
-            if (!got.Equals(sha, StringComparison.OrdinalIgnoreCase)) throw new Exception("the downloaded file didn't match the expected one, so it wasn't used");
+            Addons.Check(data, sha);
             return data;
+        }
+
+        // Asks a running SoundDeck to close itself (it saves its settings and hands the Windows mic back to the
+        // real one), waits a moment, then makes sure it's gone. Older versions don't know "quit" and are just closed.
+        public static void CloseSoundDeck()
+        {
+            if (Process.GetProcessesByName("SoundDeck").Length == 0) return;
+            try
+            {
+                using (var c = new System.Net.Sockets.TcpClient())
+                {
+                    c.Connect("127.0.0.1", 47123);
+                    byte[] quit = System.Text.Encoding.ASCII.GetBytes("quit\n");
+                    c.GetStream().Write(quit, 0, quit.Length);
+                    c.GetStream().Flush();
+                    for (int i = 0; i < 20 && Process.GetProcessesByName("SoundDeck").Length > 0; i++) Thread.Sleep(150);
+                }
+            }
+            catch { }
+            foreach (var p in Process.GetProcessesByName("SoundDeck")) { try { p.Kill(); p.WaitForExit(3000); } catch { } }
         }
 
         static Stream Resource(string name)
@@ -656,7 +640,7 @@ namespace SoundDeckSetup
             if (string.IsNullOrEmpty(dir)) dir = o.Dir;
             if (!o.Quiet && MessageBox.Show("Remove SoundDeck from this PC?\n\nYour SoundDeck settings are kept in case you reinstall.", "SoundDeck", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
-            foreach (var p in Process.GetProcessesByName("SoundDeck")) { try { p.Kill(); p.WaitForExit(3000); } catch { } }
+            Installer.CloseSoundDeck();
 
             string vbSetup = Path.Combine(dir, @"VBCABLE\VBCABLE_Setup_x64.exe");
             if (!o.Quiet && vbByUs && File.Exists(vbSetup) &&

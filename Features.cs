@@ -1030,8 +1030,15 @@ namespace SoundDeck
             var autos = names.Select(n => new { n, exe = Settings.Get("pf|" + n + "|@auto", "") }).Where(a => a.exe != "").ToList();
             if (autos.Count == 0 && autoProfile == null) return;
 
-            HashSet<string> running;
-            try { running = new HashSet<string>(Process.GetProcesses().Select(pr => pr.ProcessName.ToLowerInvariant())); }
+            var running = new HashSet<string>();
+            try
+            {
+                foreach (var pr in Process.GetProcesses())
+                {
+                    try { running.Add(pr.ProcessName.ToLowerInvariant()); } catch { }
+                    pr.Dispose();
+                }
+            }
             catch { return; }
             var match = autos.FirstOrDefault(a => running.Contains(a.exe));
             if (match == null) autoSuppressed = null;

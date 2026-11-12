@@ -178,45 +178,28 @@ namespace SoundDeck
 
         // ---------- Installers (run on a background thread) ----------
 
-        static byte[] DownloadChecked(string url, string sha)
+        // Where each add-on comes from, its expected SHA-256 and how its installer is run: see Addons.cs.
+        internal static byte[] DownloadChecked(string url, string sha)
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             byte[] data;
             using (var wc = new WebClient()) { wc.Headers.Add("User-Agent", "SoundDeck/" + AppVersion.Value); data = wc.DownloadData(url); }
-            string got;
-            using (var h = System.Security.Cryptography.SHA256.Create()) got = BitConverter.ToString(h.ComputeHash(data)).Replace("-", "");
-            if (!got.Equals(sha, StringComparison.OrdinalIgnoreCase)) throw new Exception("the download didn't match the expected file, so it wasn't used");
+            Addons.Check(data, sha);
             return data;
         }
 
         static void InstallRnNoise(Action<string> say)
         {
-            var zip = DownloadChecked("https://github.com/werman/noise-suppression-for-voice/releases/download/v1.10/win-rnnoise.zip",
-                "E4DCC186102850F8DCEBEB766AD1BF34C24F6280BD614EF84B72DAE4783FC517");
+            var zip = DownloadChecked(Addons.RnNoiseUrl, Addons.RnNoiseSha);
             say("Unpacking noise removal...");
-            string dir = Path.GetDirectoryName(RnNoise.DllPath);
-            using (var z = new ZipArchive(new MemoryStream(zip)))
-            {
-                var entry = z.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').EndsWith("vst/rnnoise_mono.dll", StringComparison.OrdinalIgnoreCase));
-                if (entry == null) throw new Exception("rnnoise_mono.dll wasn't in the download");
-                entry.ExtractToFile(RnNoise.DllPath, true);
-                var lic = z.Entries.FirstOrDefault(e => e.Name.Equals("LICENSE", StringComparison.OrdinalIgnoreCase));
-                if (lic != null) lic.ExtractToFile(Path.Combine(dir, "RNNoise-LICENSE.txt"), true);
-            }
-            File.WriteAllText(Path.Combine(dir, "RNNoise-README.txt"),
-                "Noise removal uses rnnoise_mono.dll from the open-source project\r\nhttps://github.com/werman/noise-suppression-for-voice (release v1.10).\r\n" +
-                "It was downloaded from that project's GitHub release by SoundDeck. Source code is available there.\r\n");
+            Addons.UnpackRnNoise(zip, Path.GetDirectoryName(RnNoise.DllPath), "by SoundDeck");
         }
 
         static void InstallApoNow(Action<string> say)
         {
-            var exe = DownloadChecked("https://downloads.sourceforge.net/project/equalizerapo/1.4.2/EqualizerAPO-x64-1.4.2.exe",
-                "7403BE7427BBE1936A40DDED082829B6E217FC4F5990FEE5CBA501F0AE055AFA");
-            string tmp = Path.Combine(Path.GetTempPath(), "EqualizerAPO-x64-1.4.2.exe");
-            File.WriteAllBytes(tmp, exe);
+            var exe = DownloadChecked(Addons.ApoUrl, Addons.ApoSha);
             say("Installing Equalizer APO. Click Yes when Windows asks...");
-            Process.Start(new ProcessStartInfo(tmp, "/S") { Verb = "runas", UseShellExecute = true }).WaitForExit();
-            try { File.Delete(tmp); } catch { }
+            Addons.RunElevated(exe, Addons.ApoFile, "/S");
             if (!EqApo.Installed) throw new Exception("its setup didn't finish");
             MarkInstalledByUs("ApoByUs");
             // Then pick which devices get the EQ. Its setup usually opens that window; open it if not.
@@ -232,15 +215,10 @@ namespace SoundDeck
 
         static void InstallVbCable(Action<string> say)
         {
-            var zip = DownloadChecked("https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip",
-                "BC44E8974191A5A2427D6C979E2DAB08DBB09925F3F435DFA2F0BA3E45B6EB90");
-            string dir = Path.Combine(Updater.Dir, "VBCABLE");
-            if (Directory.Exists(dir)) Directory.Delete(dir, true);
-            using (var z = new ZipArchive(new MemoryStream(zip))) z.ExtractToDirectory(dir);
+            var zip = DownloadChecked(Addons.VbCableUrl, Addons.VbCableSha);
             say("Opening the VB-CABLE installer. Click Yes, then \"Install Driver\"...");
-            var p = Process.Start(new ProcessStartInfo(Path.Combine(dir, "VBCABLE_Setup_x64.exe")) { Verb = "runas", UseShellExecute = true, WorkingDirectory = dir });
-            MarkInstalledByUs("VBCableByUs"); // so uninstalling SoundDeck offers to remove it again
-            p.WaitForExit();
+            // Marked as soon as it opens, so uninstalling SoundDeck offers to remove it again.
+            Addons.RunVbCableSetup(zip, Path.Combine(Updater.Dir, "VBCABLE"), () => MarkInstalledByUs("VBCableByUs"));
         }
 
         static void InstallGoxNow(Action<string> say)

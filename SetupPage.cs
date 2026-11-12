@@ -22,6 +22,7 @@ namespace SoundDeck
             public StepKind Kind;
             public Func<bool> Show;          // null = always shown
             public Func<bool> Done;
+            public Func<bool> CanAct;        // null = the button always works; false greys it out (an earlier step comes first)
             public Func<string> Note;        // optional extra status line (e.g. why it isn't done yet)
             public Action Act;
             public Panel Row;
@@ -61,10 +62,13 @@ namespace SoundDeck
                     Act = () => { if (!mixOn.Checked) mixOn.Checked = true; else ShowPage("Mic Mix"); } },
                 new SetupStep {
                     Title = "4.  Make the virtual mic your Windows mic", Kind = StepKind.Needed, ButtonText = "Do it for me",
-                    How = "Then Harmony and games that use the \"Default\" mic get SoundDeck without changing their settings. SoundDeck still listens to your real mic directly.",
-                    Done = () => { var v = VirtualCaptureDevice(); return v != null && Audio.GetDefaultId(EDataFlow.Capture) == v.Id; },
-                    Note = () => VirtualCaptureDevice() == null ? "Do step 1 first (and restart your PC if you just installed it)." : null,
-                    Act = () => { var v = VirtualCaptureDevice(); if (v != null) Audio.SetDefault(v.Id); } },
+                    How = "Then Harmony and games that use the \"Default\" mic get SoundDeck without changing their settings. Windows goes back to your real mic whenever Mic Mix is off or you close SoundDeck, so you aren't left silent.",
+                    Done = () => { var v = VirtualCaptureDevice(); return MicAsDefault && v != null && Audio.GetDefaultId(EDataFlow.Capture) == v.Id; },
+                    // The virtual mic is silent until Mic Mix runs, so this waits for step 3.
+                    CanAct = () => VirtualCaptureDevice() != null && mixEngine.Running,
+                    Note = () => VirtualCaptureDevice() == null ? "Do step 1 first (and restart your PC if you just installed it)."
+                        : !mixEngine.Running ? "Do step 3 first. The virtual mic is silent until Mic Mix is running." : null,
+                    Act = () => { if (!mixAsDefault.Checked) mixAsDefault.Checked = true; else TickDefaultMic(); } },
                 new SetupStep {
                     Title = "5.  Set Harmony's mic to Default", Kind = StepKind.Needed, ButtonText = "I did this",
                     How = "In Harmony's voice settings, set the microphone (input device) to Default. Do the same in any game where you picked a mic by name, and restart games that were already open.",
@@ -92,11 +96,12 @@ namespace SoundDeck
                     Done = GoxUtilityInstalled,
                     Act = () => InstallExtra("goxutil") },
                 new SetupStep {
-                    Title = "Stream Deck plugin", Kind = StepKind.Optional, ButtonText = "Get installer",
-                    How = "Adds SoundDeck's keys and dials to your Stream Deck. Run SoundDeck's installer again and tick the Stream Deck plugin; after that it updates by itself.",
-                    Show = () => File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Elgato\StreamDeck\StreamDeck.exe")),
-                    Done = () => File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Elgato\StreamDeck\Plugins\com.sounddeck.controls.sdPlugin\manifest.json")),
-                    Act = () => { try { Process.Start(SetupUrl); } catch { } } },
+                    Title = "Stream Deck plugin", Kind = StepKind.Optional, ButtonText = "Install",
+                    How = "Adds SoundDeck's keys and dials to your Stream Deck. The Stream Deck app closes for a few seconds and opens again; after that the plugin updates by itself.",
+                    Show = () => File.Exists(StreamDeckExe),
+                    Done = () => File.Exists(Path.Combine(PluginDir, "manifest.json")),
+                    CanAct = () => !pluginInstalling,
+                    Act = InstallPluginNow },
                 new SetupStep {
                     Title = "Equalizer", Kind = StepKind.Optional, ButtonText = "Install",
                     How = "Only for the Equalizer page, headphone tuning and the mic filters. Free Equalizer APO; Windows asks permission, then tick your headset and mic and restart.",
@@ -141,6 +146,133 @@ namespace SoundDeck
             return captureDevs.FirstOrDefault(d => d.Name.IndexOf(want, StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
+        // ---------- The Windows default mic follows Mic Mix ----------
+        // While Mic Mix runs, the virtual mic is the Windows default mic, so apps set to "Default" get SoundDeck's mix.
+        // The virtual mic is silent whenever Mic Mix isn't feeding it, so when Mic Mix stops or SoundDeck closes,
+        // the default goes back to the real mic. (If SoundDeck is killed, it can't; the next start puts it right.)
+
+        internal static MainForm Current;   // for the crash handler, which has no window to ask
+        CheckBox mixAsDefault;
+        bool asDefaultSyncing;
+        int micDefaultIdle;
+
+        bool MicAsDefault { get { return Settings.GetBool("mic.asDefault", false); } }
+
+        // The mic picked on the Microphone page, if it's a real one that's plugged in.
+        AudioDevice RealMicDevice()
+        {
+            // Testing aid: SOUNDDECK_TEST_REALMIC=<part of a recording device's name> stands in for the real mic,
+            // so the hand-back can be tried on a PC that has no real mic plugged in.
+            string test = Environment.GetEnvironmentVariable("SOUNDDECK_TEST_REALMIC");
+            if (!string.IsNullOrEmpty(test)) return captureDevs.FirstOrDefault(d => d.Name.IndexOf(test, StringComparison.OrdinalIgnoreCase) >= 0);
+            var m = micDevice.SelectedItem as DeviceItem;
+            if (m == null || m.Id == null || IsVirtualMic(m.Name)) return null;
+            return captureDevs.FirstOrDefault(d => d.Id == m.Id);
+        }
+
+        // Every second.
+        void TickDefaultMic()
+        {
+            var v = VirtualCaptureDevice();
+            if (v == null || mixOn == null) return;
+            string def = Audio.GetDefaultId(EDataFlow.Capture);
+            // Never asked, but Mic Mix is on and the virtual mic already is the Windows mic (set by hand, or by
+            // VB-CABLE's installer): look after it from now on, so closing SoundDeck doesn't leave a silent mic.
+            if (Settings.Get("mic.asDefault", null) == null)
+            {
+                if (def != v.Id || !mixOn.Checked) return;
+                Settings.Set("mic.asDefault", true);
+                if (mixAsDefault != null) { asDefaultSyncing = true; mixAsDefault.Checked = true; asDefaultSyncing = false; }
+            }
+            if (!MicAsDefault) return;
+            if (mixEngine.Running)
+            {
+                micDefaultIdle = 0;
+                if (def != v.Id) Audio.SetDefault(v.Id);
+            }
+            // Three seconds' grace, so a quick Mic Mix restart doesn't flip the Windows mic back and forth.
+            else if (++micDefaultIdle >= 3) RestoreRealMic();
+        }
+
+        // Puts the Windows default mic back on the real mic, if it's on the virtual one because of the setting.
+        internal void RestoreRealMic()
+        {
+            try
+            {
+                if (!MicAsDefault) return;
+                var v = VirtualCaptureDevice();
+                var real = RealMicDevice();
+                if (v == null || real == null) return; // no real mic plugged in: nothing to go back to
+                if (Audio.GetDefaultId(EDataFlow.Capture) == v.Id) Audio.SetDefault(real.Id);
+            }
+            catch { }
+        }
+
+        // The tick box on the Mic Mix page (step 4 on the Setup page ticks the same box).
+        void BuildMicAsDefault(Panel p, int y)
+        {
+            mixAsDefault = Chk(p, "Make the virtual mic my Windows mic while Mic Mix is on", 25, y);
+            mixAsDefault.Checked = MicAsDefault;
+            mixAsDefault.CheckedChanged += (s, e) =>
+            {
+                if (asDefaultSyncing) return;
+                if (!mixAsDefault.Checked) RestoreRealMic(); // while the setting still says yes
+                Settings.Set("mic.asDefault", mixAsDefault.Checked);
+                micDefaultIdle = 0;
+                TickDefaultMic();
+            };
+            Lbl(p, "Harmony and games set to \"Default\" then use SoundDeck. Windows goes back to your real mic when Mic Mix or SoundDeck is off.", 45, y + 24, 8.5f, false, Dim);
+        }
+
+        // ---------- Stream Deck plugin ----------
+        // The plugin is packed inside SoundDeck.exe (see build.bat), so adding it needs no download.
+
+        static string StreamDeckExe { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Elgato\StreamDeck\StreamDeck.exe"); } }
+        static string PluginDir { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Elgato\StreamDeck\Plugins\com.sounddeck.controls.sdPlugin"); } }
+        bool pluginInstalling;
+
+        void InstallPluginNow()
+        {
+            if (pluginInstalling) return;
+            bool packed;
+            using (var probe = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("plugin.zip")) packed = probe != null;
+            // A copy built without the plugin inside: fall back to the installer, which has it.
+            if (!packed) { try { Process.Start(SetupUrl); } catch { } return; }
+            if (MessageBox.Show(this, "SoundDeck will add its keys and dials to your Stream Deck.\n\nThe Stream Deck app closes for a few seconds and opens again. Go ahead?",
+                "SoundDeck", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            pluginInstalling = true;
+            string sdExe = StreamDeckExe, dest = PluginDir, self = Application.ExecutablePath;
+            new System.Threading.Thread(() =>
+            {
+                string err = null;
+                try
+                {
+                    // Its files can't be replaced while the Stream Deck app (and the plugin it runs) is open.
+                    foreach (string name in new[] { "StreamDeck", "SoundDeckPlugin" })
+                        foreach (var pr in Process.GetProcessesByName(name)) { try { pr.Kill(); pr.WaitForExit(5000); } catch { } pr.Dispose(); }
+                    System.Threading.Thread.Sleep(1500);
+                    if (Directory.Exists(dest)) Directory.Delete(dest, true);
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                    using (var zip = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("plugin.zip"))
+                    using (var z = new System.IO.Compression.ZipArchive(zip)) System.IO.Compression.ZipFileExtensions.ExtractToDirectory(z, dest);
+                    // The plugin starts this copy of SoundDeck when needed, and updates only touch a plugin that points here.
+                    File.WriteAllText(Path.Combine(dest, "sounddeck_path.txt"), self);
+                }
+                catch (Exception ex) { err = ex.Message; }
+                try { if (File.Exists(sdExe)) Process.Start(new ProcessStartInfo(sdExe) { UseShellExecute = true }); } catch { }
+                try
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        pluginInstalling = false;
+                        UpdateSetup();
+                        if (err != null) MessageBox.Show(this, "The Stream Deck plugin wasn't added: " + err, "SoundDeck", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }));
+                }
+                catch { }
+            }) { IsBackground = true }.Start();
+        }
+
         // Stacks the visible rows; only re-places them when which rows are shown (or their height) changes.
         void LayoutSetup(bool force)
         {
@@ -181,6 +313,9 @@ namespace SoundDeck
                 bool manual = s.ButtonText == "I did this";
                 s.Button.Text = manual ? (done ? "Undo" : "I did this") : s.ButtonText;
                 s.Button.Visible = manual || !done;
+                bool can = true;
+                if (s.CanAct != null) { try { can = s.CanAct(); } catch { } }
+                s.Button.Enabled = can;
                 if (s.Kind == StepKind.Needed) { needed++; if (done) neededDone++; }
             }
             LayoutSetup(false);

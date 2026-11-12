@@ -93,9 +93,6 @@ namespace SoundDeck
     // permission prompt, none of its setup screens), then SoundDeck starts its background part hidden.
     static class GoxUtil
     {
-        public const string Url = "https://github.com/GoXLR-on-Linux/goxlr-utility/releases/download/v1.2.4/goxlr-utility-1.2.4.exe";
-        public const string Sha = "0A8743D27EA5D1741956AECFC3AE26C0F7399945CF29D2BB6B3DAB459E86AC2F"; // GitHub's published SHA-256
-
         // Where its installer put it (it records the folder in the registry), or null.
         public static string Dir()
         {
@@ -112,18 +109,32 @@ namespace SoundDeck
             return File.Exists(Path.Combine(def, "goxlr-daemon.exe")) ? def : null;
         }
 
-        public static bool Running { get { return Process.GetProcessesByName("goxlr-daemon").Length > 0; } }
+        public static bool Running
+        {
+            get
+            {
+                var found = Process.GetProcessesByName("goxlr-daemon");
+                foreach (var p in found) p.Dispose();
+                return found.Length > 0;
+            }
+        }
 
         // TC-Helicon's own GoXLR App ("GoXLR App.exe"). Only one of the two can talk to the GoXLR at a time.
         // GoXLR Utility's own programs are all named "goxlr-...", so they don't count.
         public static bool OfficialAppRunning()
         {
-            foreach (var p in Process.GetProcesses())
+            var all = Process.GetProcesses();
+            try
             {
-                string n = p.ProcessName;
-                if (n.StartsWith("goxlr", StringComparison.OrdinalIgnoreCase) && !n.StartsWith("goxlr-", StringComparison.OrdinalIgnoreCase)) return true;
+                foreach (var p in all)
+                {
+                    string n;
+                    try { n = p.ProcessName; } catch { continue; }
+                    if (n.StartsWith("goxlr", StringComparison.OrdinalIgnoreCase) && !n.StartsWith("goxlr-", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
             }
-            return false;
+            finally { foreach (var p in all) p.Dispose(); }
         }
 
         // Starts its background part (tray icon only, no window). SoundDeck isn't elevated, so neither is it.
@@ -139,19 +150,10 @@ namespace SoundDeck
         public static void Install(Action<string> say)
         {
             if (OfficialAppRunning()) throw new Exception("close TC-Helicon's GoXLR App first (only one can control the GoXLR), then try again");
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            byte[] data;
-            using (var wc = new WebClient()) { wc.Headers.Add("User-Agent", "SoundDeck/" + AppVersion.Value); data = wc.DownloadData(Url); }
-            string got;
-            using (var h = System.Security.Cryptography.SHA256.Create()) got = BitConverter.ToString(h.ComputeHash(data)).Replace("-", "");
-            if (!got.Equals(Sha, StringComparison.OrdinalIgnoreCase)) throw new Exception("the download didn't match the expected file, so it wasn't used");
-            string tmp = Path.Combine(Path.GetTempPath(), "goxlr-utility-1.2.4.exe");
-            File.WriteAllBytes(tmp, data);
+            byte[] data = MainForm.DownloadChecked(Addons.GoxUrl, Addons.GoxSha);
             say("Installing GoXLR Utility. Click Yes when Windows asks...");
             // /S = silent: no setup screens. It also adds itself to Windows startup.
-            var p = Process.Start(new ProcessStartInfo(tmp, "/S") { Verb = "runas", UseShellExecute = true });
-            p.WaitForExit();
-            try { File.Delete(tmp); } catch { }
+            Addons.RunElevated(data, Addons.GoxFile, "/S");
             if (Dir() == null) throw new Exception("its setup didn't finish");
             say("Starting GoXLR Utility...");
             Start();
@@ -425,8 +427,10 @@ namespace SoundDeck
         {
             if (goxUtilStatus == null) return;
             bool hasDevice = HasGoXlr;
-            // This runs every 50 ms: look at installed programs and running processes at most every 2 seconds.
-            if (DateTime.Now >= goxProbeNext)
+            // This runs every 50 ms. While the GoXLR is connected there's nothing to look up (GoXLR Utility is
+            // answering); otherwise look at installed programs and running processes at most every 2 seconds.
+            if (st != null) { goxProbe[0] = true; goxProbe[1] = true; goxProbe[2] = false; goxProbeNext = DateTime.MinValue; }
+            else if (DateTime.Now >= goxProbeNext)
             {
                 goxProbeNext = DateTime.Now.AddSeconds(2);
                 goxProbe[0] = hasDevice && GoxUtilityInstalled();
