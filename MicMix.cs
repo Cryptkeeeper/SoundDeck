@@ -361,6 +361,7 @@ namespace SoundDeck
             CaptureStream mic = null;
             RenderStream outp = null, streamOut = null;
             var sources = new Dictionary<uint, CaptureStream>();
+            var filters = new MicFilters(); // Microphone page voice processing
             var denoise = new NoiseRemoval.Stream();
             var dyn = new Dynamics(true); // gate + compressor; this stream drives the live readouts
             var fx = new VoiceFx();
@@ -429,6 +430,7 @@ namespace SoundDeck
                     Array.Clear(mediaBuf, 0, n);
                     Array.Clear(streamApps, 0, n);
                     mic.Fifo.ReadAdd(micBuf, n, 1f);
+                    filters.Process(micBuf, frames);
                     denoise.Process(micBuf, frames);
                     dyn.Process(micBuf, frames);
                     fx.Process(micBuf, frames);
@@ -591,6 +593,7 @@ namespace SoundDeck
         {
             CaptureStream cap = null;
             RenderStream outp = null;
+            var filters = new MicFilters();
             var denoise = new NoiseRemoval.Stream();
             var dyn = new Dynamics(false);
             var fx = new VoiceFx();
@@ -613,9 +616,10 @@ namespace SoundDeck
                     Array.Clear(mix, 0, n);
                     if (cap != null)
                     {
-                        // Hear yourself: same noise removal as friends get, so you hear what they hear.
+                        // Hear yourself: same processing as friends get, so you hear what they hear.
                         Array.Clear(micBuf, 0, n);
                         cap.Fifo.ReadAdd(micBuf, n, 1f);
+                        filters.Process(micBuf, frames);
                         denoise.Process(micBuf, frames);
                         dyn.Process(micBuf, frames);
                         fx.Process(micBuf, frames);
@@ -686,6 +690,9 @@ namespace SoundDeck
                 cap = CaptureStream.OpenDevice(en, DeviceId);
                 var buf = new float[Block * 2];
                 var hist = new Queue<float>();
+                // Measured after the Microphone page's filters and boost, as friends get it (the gate's "Opens at"
+                // compares against this level). Equalizer APO used to apply them before SoundDeck saw the mic.
+                var filters = new MicFilters();
                 while (running)
                 {
                     Thread.Sleep(10);
@@ -694,6 +701,7 @@ namespace SoundDeck
                     {
                         Array.Clear(buf, 0, buf.Length);
                         cap.Fifo.ReadAdd(buf, buf.Length, 1f);
+                        filters.Process(buf, Block);
                         float pk = 0; double sum = 0;
                         for (int i = 0; i < buf.Length; i++)
                         {

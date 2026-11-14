@@ -1,12 +1,13 @@
 // SoundDeck installer. One exe that:
 //  - installs SoundDeck for the current user (no admin needed) into %LOCALAPPDATA%\Programs\SoundDeck
-//  - downloads RNNoise (noise removal) from its official GitHub release
+//  - adds RNNoise (noise removal), which it carries, checked against the official release's SHA-256
 //  - downloads VB-CABLE (virtual mic) from vb-audio.com and opens its installer, if no virtual mic is present
 //  - installs the Stream Deck plugin if the Stream Deck app is installed
+//  - only if ticked: downloads Equalizer APO (just for the Equalizer page; the mic doesn't need it since 1.9.0)
 //  - adds shortcuts, start-with-Windows, and an entry in Settings > Apps for uninstalling
 // Downloads are pinned to exact versions and checked by SHA-256, so a changed file is refused.
 //
-// Command line: /uninstall   |   /dir:<folder> /quiet /no-vbcable /no-streamdeck /no-startup /no-shortcuts /no-launch (for testing)
+// Command line: /uninstall   |   /dir:<folder> /quiet /no-vbcable /no-streamdeck /no-startup /no-shortcuts /no-launch /apo (for testing)
 
 using System;
 using System.Collections.Generic;
@@ -58,7 +59,7 @@ namespace SoundDeckSetup
     {
         public string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "SoundDeck");
         public bool Uninstall, Quiet, NoLaunch;
-        public bool Noise = true, Apo = true, GoxUtil = true, VbCable = true, StreamDeck = true, Desktop = true, Startup = true, StartMenu = true;
+        public bool Noise = true, Apo = false, GoxUtil = true, VbCable = true, StreamDeck = true, Desktop = true, Startup = true, StartMenu = true;
 
         public Options(string[] args)
         {
@@ -73,6 +74,7 @@ namespace SoundDeckSetup
                 else if (l == "/no-shortcuts") { Desktop = false; StartMenu = false; }
                 else if (l == "/no-noise") Noise = false;
                 else if (l == "/no-apo") Apo = false;
+                else if (l == "/apo") Apo = true;
                 else if (l == "/no-goxlr") GoxUtil = false;
                 else if (l == "/no-launch") NoLaunch = true;
                 else if (l.StartsWith("/dir:")) Dir = a.Substring(5).Trim('"');
@@ -254,18 +256,31 @@ namespace SoundDeckSetup
             string setupCopy = Path.Combine(o.Dir, "SoundDeckSetup.exe");
             if (!string.Equals(Path.GetFullPath(self), Path.GetFullPath(setupCopy), StringComparison.OrdinalIgnoreCase)) File.Copy(self, setupCopy, true);
 
-            // Already there from an earlier install (it never changes): skip the 36 MB download.
+            // Already there from an earlier install (it never changes): leave it.
             if (o.Noise && File.Exists(Path.Combine(o.Dir, "rnnoise_mono.dll")) && new FileInfo(Path.Combine(o.Dir, "rnnoise_mono.dll")).Length > 1000000)
                 report(48, "Noise removal is already installed.");
             else if (o.Noise)
             {
+                // This installer carries it (nothing to download). Only if that copy is missing or damaged does it
+                // fall back to the official 36 MB download.
+                bool done = false;
                 try
                 {
-                    var zip = Download(Addons.RnNoiseUrl, Addons.RnNoiseSha, "noise removal (RNNoise)", 10, 48);
-                    report(49, "Unpacking noise removal...");
-                    Addons.UnpackRnNoise(zip, o.Dir, "during setup");
+                    report(40, "Adding noise removal...");
+                    Addons.WriteRnNoise(ReadResource("rnnoise_mono.dll"), ReadResourceOrNull("RNNoise-LICENSE.txt"), o.Dir);
+                    done = true;
                 }
-                catch (Exception ex) { Warnings.Add("Noise removal wasn't installed: " + ex.Message); }
+                catch { }
+                if (!done)
+                {
+                    try
+                    {
+                        var zip = Download(Addons.RnNoiseUrl, Addons.RnNoiseSha, "noise removal (RNNoise)", 10, 48);
+                        report(49, "Unpacking noise removal...");
+                        Addons.UnpackRnNoise(zip, o.Dir, "during setup");
+                    }
+                    catch (Exception ex) { Warnings.Add("Noise removal wasn't installed: " + ex.Message); }
+                }
             }
 
             string sd = Detect.StreamDeckExe();
@@ -472,6 +487,17 @@ namespace SoundDeckSetup
             using (var f = File.Create(path)) s.CopyTo(f);
         }
 
+        static byte[] ReadResource(string name)
+        {
+            using (var s = Resource(name))
+            using (var m = new MemoryStream()) { s.CopyTo(m); return m.ToArray(); }
+        }
+
+        static byte[] ReadResourceOrNull(string name)
+        {
+            try { return ReadResource(name); } catch { return null; }
+        }
+
         public static void Shortcut(string lnk, string target, string description)
         {
             var t = Type.GetTypeFromProgID("WScript.Shell");
@@ -515,15 +541,16 @@ namespace SoundDeckSetup
             Controls.Add(choices);
 
             bool hasNoise = File.Exists(Path.Combine(o.Dir, "rnnoise_mono.dll"));
-            noise = Ui.Chk(choices, "Noise removal", hasNoise ? "Already installed, so nothing to download."
-                : "Downloads RNNoise (36 MB) from its official GitHub page. Removes fans, keyboard and background noise from your mic.", 16, 14);
+            noise = Ui.Chk(choices, "Noise removal", hasNoise ? "Already installed."
+                : "Removes fans, keyboard and background noise from your mic. Included in this installer (open-source RNNoise), so nothing to download.", 16, 14);
             noise.Checked = true;
 
+            // Optional since 1.9.0: the mic filters run inside SoundDeck now, so this is only for headphone EQ.
             bool hasApo = Detect.ApoDir() != null;
-            apo = Ui.Chk(choices, "Equalizer (Equalizer APO)", hasApo
+            apo = Ui.Chk(choices, "Equalizer (Equalizer APO, optional)", hasApo
                 ? "Not needed: Equalizer APO is already installed."
-                : "Needed for the Equalizer and mic voice processing. Downloads 11 MB from SourceForge. Windows asks permission, then a window lists your devices: tick your headphones/headset and your mic, then OK. Restart after.", 16, 76);
-            apo.Checked = !hasApo; Ui.Usable(apo, !hasApo);
+                : "Only for the Equalizer page (headphone tuning). Your mic doesn't need it. Downloads 11 MB from SourceForge. Windows asks permission, then tick your headphones/headset in its window and restart.", 16, 76);
+            apo.Checked = false; Ui.Usable(apo, !hasApo);
 
             string vm = Detect.VirtualMic();
             vb = Ui.Chk(choices, "Virtual mic (VB-CABLE)", vm != null
@@ -594,7 +621,7 @@ namespace SoundDeckSetup
             try { if (!o.NoLaunch) Process.Start(inst.Exe); } catch { }
             title.Text = "SoundDeck is installed";
             var lines = new List<string>();
-            if (inst.ApoInstalled) lines.Add("In the Equalizer APO window, tick your headphones/headset and your mic, then click OK.");
+            if (inst.ApoInstalled) lines.Add("In the Equalizer APO window, tick your headphones/headset, then click OK.");
             if (inst.NeedsRestart) lines.Add("Restart your PC to finish setting up " +
                 (inst.ApoInstalled && inst.VbCableStarted ? "the equalizer and virtual mic." : inst.ApoInstalled ? "the equalizer." : "the virtual mic."));
             lines.Add("In Harmony and your games, set the mic to " + (Detect.VirtualMic() ?? (inst.NeedsRestart ? "\"CABLE Output (VB-Audio Virtual Cable)\" after restarting" : "your SoundDeck virtual mic")) + ", and turn on Mic Mix in SoundDeck.");

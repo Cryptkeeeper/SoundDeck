@@ -81,7 +81,7 @@ namespace SoundDeck
                     Act = GuardDefaultOutput },
                 new SetupStep {
                     Title = "Noise removal", Kind = StepKind.Recommended, ButtonText = "Install",
-                    How = "Removes fans, keyboard and background noise from your mic. Free, from its official GitHub page.",
+                    How = "Removes fans, keyboard and background noise from your mic. It comes with SoundDeck's installer; if it's missing, this downloads it (free) from its official GitHub page.",
                     Done = () => RnNoise.Available,
                     Act = () => InstallExtra("noise") },
                 new SetupStep {
@@ -104,7 +104,7 @@ namespace SoundDeck
                     Act = InstallPluginNow },
                 new SetupStep {
                     Title = "Equalizer", Kind = StepKind.Optional, ButtonText = "Install",
-                    How = "Only for the Equalizer page, headphone tuning and the mic filters. Free Equalizer APO; Windows asks permission, then tick your headset and mic and restart.",
+                    How = "Only for the Equalizer page and headphone tuning. Your mic doesn't need it. Free Equalizer APO; Windows asks permission, then tick your headset and restart.",
                     Done = () => EqApo.Installed,
                     Act = () => InstallExtra("apo") },
                 new SetupStep {

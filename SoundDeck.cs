@@ -489,6 +489,26 @@ namespace SoundDeck
             catch (Exception ex) { return ex.Message; }
         }
 
+        // Since 1.9.0 SoundDeck.txt (SoundDeck's own part of Equalizer APO's config) has no mic section: the mic's voice
+        // processing runs inside SoundDeck. This takes out the section older versions wrote, so the mic isn't
+        // processed twice. Nothing else in the file changes. Returns null when done (or nothing to do), "denied", or an error.
+        public static string RemoveMicSection()
+        {
+            string dir = ConfigDir();
+            if (dir == null) return null;
+            string file = Path.Combine(dir, "SoundDeck.txt");
+            try
+            {
+                if (!File.Exists(file)) return null;
+                string text = File.ReadAllText(file);
+                string cleaned = MicDevices.WithoutMicSections(text, MicDevices.IsCapture);
+                if (cleaned != text) File.WriteAllText(file, cleaned);
+                return null;
+            }
+            catch (UnauthorizedAccessException) { return "denied"; }
+            catch (Exception ex) { return ex.Message; }
+        }
+
         public static void FixPermissions()
         {
             string dir = ConfigDir();
@@ -628,8 +648,7 @@ namespace SoundDeck
         ComboBox micDevice;
         TrackBar micLevel, micGain;
         Label micLevelLbl, micGainLbl;
-        CheckBox micOn, micHp, micClarity, micHarsh, micNs;
-        TextBox micNsPath;
+        CheckBox micOn, micHp, micClarity, micHarsh;
 
         // Mic Mix
         MicMixEngine mixEngine = new MicMixEngine();
@@ -696,6 +715,7 @@ namespace SoundDeck
             LoadEqDevice();
             LoadMicDevice();
             UpdateApoStatus();
+            MoveMicOffApo();
             // Testing aid: SOUNDDECK_PAGE=<page name> opens that page instead of the Mixer.
             string startPage = Environment.GetEnvironmentVariable("SOUNDDECK_PAGE");
             // A fresh install opens on Setup; after that, the Mixer.
@@ -828,7 +848,8 @@ namespace SoundDeck
                 kv.Value.ForeColor = on ? Accent : Fg;
             }
             if (name == "Microphone") LoadMicLevel();
-            if (name == "Equalizer" || name == "Microphone") UpdateApoStatus();
+            if (name == "Equalizer") UpdateApoStatus();
+            if (name == "Microphone") UpdateMicStatus();
             if (name == "Setup") UpdateSetup();
         }
 
@@ -1316,7 +1337,9 @@ namespace SoundDeck
         void BuildMic()
         {
             var p = NewPage("Microphone", "Microphone", "Set your mic level and clean up how you sound to others.");
-            micStatus = ApoStatus(p, 84);
+            // Voice processing runs inside SoundDeck (MicFilters.cs), so this says whether friends get it right now.
+            micStatus = Lbl(p, "", 25, 84, 9.5f, false, Dim);
+            micStatus.MaximumSize = new Size(800, 0);
 
             Lbl(p, "Mic", 25, 134, 9.5f, false, Dim);
             micDevice = Combo(p, 100, 130, 330);
@@ -1326,7 +1349,6 @@ namespace SoundDeck
                 var it = micDevice.SelectedItem as DeviceItem;
                 if (it != null) Settings.Set("mic.dev", it.Id);
                 LoadMicLevel();
-                ScheduleApo();
                 RestartMicMix();
             };
 
@@ -1352,42 +1374,71 @@ namespace SoundDeck
             p.Controls.Add(micGain);
             micGainLbl = Lbl(p, "", 378, 384, 10f, true, Fg);
 
-            micNs = Chk(p, "Noise suppression plugin (older option)", 45, 426);
-            var nsNote = Lbl(p, "Not needed: Remove noise in the Mic column on the Mixer page does this with nothing to install.", 65, 454, 9f, false, Dim);
+            var nsNote = Lbl(p, "Noise removal is in the Mic column on the Mixer page.", 45, 426, 9f, false, Dim);
             nsNote.MaximumSize = new Size(700, 0);
-            micNsPath = new TextBox { Left = 65, Top = 480, Width = 430, BackColor = Card2, ForeColor = Fg, BorderStyle = BorderStyle.FixedSingle, ReadOnly = true };
-            p.Controls.Add(micNsPath);
-            var browse = Btn(p, "Browse...", 503, 478, 90, 26);
-            browse.Click += (s, e) =>
-            {
-                using (var dlg = new OpenFileDialog { Filter = "VST plugin (*.dll)|*.dll", Title = "Pick rnnoise_mono.dll" })
-                {
-                    if (dlg.ShowDialog(this) == DialogResult.OK)
-                    {
-                        micNsPath.Text = dlg.FileName;
-                        Settings.Set("mic.nspath", dlg.FileName);
-                        if (!micNs.Checked) micNs.Checked = true;
-                        ScheduleApo();
-                    }
-                }
-            };
-            Link(p, "Get RNNoise (free)", 603, 482, "https://github.com/werman/noise-suppression-for-voice/releases");
 
             micOn.Checked = Settings.GetBool("mic.on", false);
             micHp.Checked = Settings.GetBool("mic.hp", true);
             micClarity.Checked = Settings.GetBool("mic.clarity", false);
             micHarsh.Checked = Settings.GetBool("mic.harsh", false);
-            micNs.Checked = Settings.GetBool("mic.ns", false);
             micGain.Value = Math.Max(0, Math.Min(12, Settings.GetInt("mic.gain", 0)));
             micGainLbl.Text = "+" + micGain.Value + " dB";
-            micNsPath.Text = Settings.Get("mic.nspath", "");
 
-            micOn.CheckedChanged += (s, e) => { Settings.Set("mic.on", micOn.Checked); ScheduleApo(); };
-            micHp.CheckedChanged += (s, e) => { Settings.Set("mic.hp", micHp.Checked); ScheduleApo(); };
-            micClarity.CheckedChanged += (s, e) => { Settings.Set("mic.clarity", micClarity.Checked); ScheduleApo(); };
-            micHarsh.CheckedChanged += (s, e) => { Settings.Set("mic.harsh", micHarsh.Checked); ScheduleApo(); };
-            micNs.CheckedChanged += (s, e) => { Settings.Set("mic.ns", micNs.Checked); ScheduleApo(); };
-            micGain.ValueChanged += (s, e) => { micGainLbl.Text = "+" + micGain.Value + " dB"; Settings.Set("mic.gain", micGain.Value); ScheduleApo(); };
+            micOn.CheckedChanged += (s, e) => { Settings.Set("mic.on", micOn.Checked); ApplyMicFilters(); };
+            micHp.CheckedChanged += (s, e) => { Settings.Set("mic.hp", micHp.Checked); ApplyMicFilters(); };
+            micClarity.CheckedChanged += (s, e) => { Settings.Set("mic.clarity", micClarity.Checked); ApplyMicFilters(); };
+            micHarsh.CheckedChanged += (s, e) => { Settings.Set("mic.harsh", micHarsh.Checked); ApplyMicFilters(); };
+            micGain.ValueChanged += (s, e) => { micGainLbl.Text = "+" + micGain.Value + " dB"; Settings.Set("mic.gain", micGain.Value); ApplyMicFilters(); };
+            ApplyMicFilters();
+        }
+
+        // 1.9.0 moved the mic's voice processing from Equalizer APO into SoundDeck. Once per PC: take the mic section out
+        // of SoundDeck's Equalizer APO config (or friends would hear it applied twice), and keep noise removal on for
+        // anyone who used the old noise plugin there. The other mic settings (mic.on, mic.hp...) carry on unchanged.
+        void MoveMicOffApo()
+        {
+            if (Settings.GetBool("mic.inApp", false)) return;
+            if (Settings.GetBool("mic.ns", false))
+            {
+                if (mcNs != null && !mcNs.Checked) mcNs.Checked = true; // saves ns.on and applies it
+                else Settings.Set("ns.on", true);
+            }
+            Settings.Remove("mic.ns");
+            Settings.Remove("mic.nspath");
+            // If Equalizer APO's folder can't be written right now, try again next start.
+            if (EqApo.RemoveMicSection() == null) Settings.Set("mic.inApp", true);
+        }
+
+        // Hands the Microphone page's voice processing to the audio streams (MicFilters.cs). Takes effect at once.
+        void ApplyMicFilters()
+        {
+            VoiceFilters.LowCut = micHp.Checked;
+            VoiceFilters.Clarity = micClarity.Checked;
+            VoiceFilters.Soften = micHarsh.Checked;
+            VoiceFilters.BoostDb = micGain.Value;
+            VoiceFilters.On = micOn.Checked;
+            UpdateMicStatus();
+        }
+
+        void UpdateMicStatus()
+        {
+            if (micStatus == null) return;
+            bool running = mixEngine != null && mixEngine.Running;
+            if (!micOn.Checked)
+            {
+                micStatus.Text = "Voice processing is off. Tick it below to clean up how you sound. It runs inside SoundDeck, so there's nothing to install.";
+                micStatus.ForeColor = Dim;
+            }
+            else if (!running)
+            {
+                micStatus.Text = "Turn on Mic Mix so friends and your stream hear your voice processing.";
+                micStatus.ForeColor = Warn;
+            }
+            else
+            {
+                micStatus.Text = "On. Friends and your stream hear your voice processing.";
+                micStatus.ForeColor = Good;
+            }
         }
 
         void LoadMicDevice() { }
@@ -1418,20 +1469,20 @@ namespace SoundDeck
         }
 
         // Downloads Equalizer APO 1.4.2 from SourceForge, checks it, installs it silently (Windows asks permission),
-        // then its device window opens so the user can tick their headset and mic.
+        // then its device window opens so the user can tick their headset.
         bool apoInstalling;
         void InstallApo()
         {
             if (apoInstalling) return;
             apoInstalling = true;
-            foreach (var l in new[] { eqStatus, micStatus }) { l.Text = "Downloading Equalizer APO (11 MB)..."; l.ForeColor = Dim; ((Control)l.Tag).Enabled = false; }
+            eqStatus.Text = "Downloading Equalizer APO (11 MB)..."; eqStatus.ForeColor = Dim; ((Control)eqStatus.Tag).Enabled = false;
             var t = new System.Threading.Thread(() =>
             {
                 string err = null;
                 try
                 {
                     // The same install as the "missing parts" window (Extras.cs); progress goes to the page's status lines.
-                    InstallApoNow(text => { try { BeginInvoke(new Action(() => { foreach (var l in new[] { eqStatus, micStatus }) l.Text = text; })); } catch { } });
+                    InstallApoNow(text => { try { BeginInvoke(new Action(() => { eqStatus.Text = text; })); } catch { } });
                 }
                 catch (System.ComponentModel.Win32Exception) { err = "Windows permission was declined, so Equalizer APO wasn't installed."; }
                 catch (Exception ex) { err = "Couldn't install Equalizer APO: " + ex.Message; }
@@ -1439,8 +1490,8 @@ namespace SoundDeck
                 {
                     apoInstalling = false;
                     UpdateApoStatus();
-                    if (err != null) foreach (var l in new[] { eqStatus, micStatus }) { l.Text = err; l.ForeColor = Accent; ((Control)l.Tag).Enabled = true; }
-                    else MessageBox.Show(this, "Equalizer APO is installed.\n\n1. In its window, tick your headphones/headset and your mic, then click OK.\n2. Restart your PC.\n\nAfter that, the Equalizer and voice processing work.", "SoundDeck", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    if (err != null) { eqStatus.Text = err; eqStatus.ForeColor = Accent; ((Control)eqStatus.Tag).Enabled = true; }
+                    else MessageBox.Show(this, "Equalizer APO is installed.\n\n1. In its window, tick your headphones/headset, then click OK.\n2. Restart your PC.\n\nAfter that, the Equalizer works.", "SoundDeck", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }));
             }) { IsBackground = true };
             t.Start();
@@ -1449,15 +1500,13 @@ namespace SoundDeck
         void UpdateApoStatus()
         {
             bool ok = EqApo.Installed;
-            foreach (var l in new[] { eqStatus, micStatus })
-            {
-                l.ForeColor = ok ? Good : Accent;
-                l.Text = ok
-                    ? "Equalizer APO is ready. No effect on a device? Tick it in the Equalizer APO Configurator, then restart."
-                    : "This needs Equalizer APO (free, open source, no ads). Click the button to install it; Windows asks permission once, then tick your headset and mic and restart.";
-                ((Control)l.Tag).Visible = !ok;
-                ((Control)l.Tag).Enabled = !apoInstalling;
-            }
+            var l = eqStatus;
+            l.ForeColor = ok ? Good : Accent;
+            l.Text = ok
+                ? "Equalizer APO is ready. No effect on a device? Tick it in the Equalizer APO Configurator, then restart."
+                : "The Equalizer needs Equalizer APO (free, open source, no ads). Click the button to install it; Windows asks permission once, then tick your headset and restart.";
+            ((Control)l.Tag).Visible = !ok;
+            ((Control)l.Tag).Enabled = !apoInstalling;
         }
 
         void ScheduleApo()
@@ -1486,18 +1535,7 @@ namespace SoundDeck
                     if (bands[i] != 0)
                         sb.AppendLine(string.Format(Inv, "Filter: ON PK Fc {0} Hz Gain {1} dB Q 1.41", Freqs[i], bands[i]));
             }
-            var mic = micDevice.SelectedItem as DeviceItem;
-            if (micOn.Checked && mic != null)
-            {
-                sb.AppendLine("# " + mic.Name);
-                sb.AppendLine("Device: " + Audio.GuidOf(mic.Id));
-                string ns = Settings.Get("mic.nspath", "");
-                if (micNs.Checked && ns != "" && File.Exists(ns)) sb.AppendLine("VSTPlugin: Library \"" + ns + "\"");
-                if (micHp.Checked) sb.AppendLine("Filter: ON HP Fc 80 Hz");
-                if (micClarity.Checked) sb.AppendLine("Filter: ON PK Fc 3500 Hz Gain 4 dB Q 1");
-                if (micHarsh.Checked) sb.AppendLine("Filter: ON PK Fc 7000 Hz Gain -4 dB Q 2");
-                if (micGain.Value > 0) sb.AppendLine("Preamp: " + micGain.Value + " dB");
-            }
+            // Only headphones/speakers here: the mic's voice processing runs inside SoundDeck since 1.9.0 (MicFilters.cs).
             sb.AppendLine("Device: all");
 
             string err = EqApo.Write(sb.ToString());
@@ -1732,8 +1770,7 @@ namespace SoundDeck
             mixCableLink.Visible = cable == null;
 
             var mic = micDevice.SelectedItem as DeviceItem;
-            bool badMic = mic == null || mic.Name.IndexOf("CABLE", StringComparison.OrdinalIgnoreCase) >= 0
-                || mic.Name.IndexOf("Steam Streaming", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool badMic = mic == null || IsVirtualMic(mic.Name);
             mixMicName.Text = badMic
                 ? "Pick your real mic (like Headset Microphone) on the Microphone page."
                 : "Using mic: " + mic.Name + "  (change it on the Microphone page)";
@@ -1977,6 +2014,7 @@ namespace SoundDeck
             TickEffectsStatus();
             TickGoxAutostart();
             if (pages["Setup"].Visible) UpdateSetup();
+            if (pages["Microphone"].Visible) UpdateMicStatus();
             TickProfiles();
             LoadMicColumn();
             Settings.SaveIfDirty();
@@ -2003,7 +2041,7 @@ namespace SoundDeck
             if (sbDev != null) FillOutCombo(sbDev, "sb.dev");
             if (monDev != null) FillOutCombo(monDev, "mon.dev");
             FillDeviceCombo(eqDevice, renderDevs, Settings.Get("eq.dev", Audio.GetDefaultId(EDataFlow.Render) ?? ""), false);
-            FillDeviceCombo(micDevice, captureDevs, Settings.Get("mic.dev", null) ?? RealMicId(), false);
+            FillDeviceCombo(micDevice, captureDevs, SavedMicId(), false);
             LoadEqDevice();
             LoadMicLevel();
             FillMicColumn();
@@ -2011,10 +2049,13 @@ namespace SoundDeck
             FillStreamDevices();
         }
 
+        // Recording devices that aren't your voice: virtual mics, and "Stereo Mix" (everything your PC plays).
         static bool IsVirtualMic(string name)
         {
             return name.IndexOf("CABLE", StringComparison.OrdinalIgnoreCase) >= 0
                 || name.IndexOf("Steam Streaming", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Stereo Mix", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("What U Hear", StringComparison.OrdinalIgnoreCase) >= 0
                 // GoXLR inputs that aren't a mic: the full stream mix (would echo everything) and the sampler.
                 || (IsGoXlr(name) && (name.StartsWith("Broadcast Stream Mix", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Sample", StringComparison.OrdinalIgnoreCase)));
         }
@@ -2022,15 +2063,37 @@ namespace SoundDeck
         // The Windows default mic may be the virtual mic (so games hear Mic Mix), so pick and remember a real one.
         string RealMicId()
         {
-            string def = Audio.GetDefaultId(EDataFlow.Capture);
-            var real = captureDevs.Where(d => !IsVirtualMic(d.Name)).ToList();
-            var pick = real.FirstOrDefault(d => d.Id == def)
-                ?? real.FirstOrDefault(d => IsGoXlr(d.Name) && d.Name.StartsWith("Chat Mic", StringComparison.OrdinalIgnoreCase))
-                ?? real.FirstOrDefault(d => d.Name.IndexOf("Headset", StringComparison.OrdinalIgnoreCase) >= 0)
-                ?? real.FirstOrDefault();
+            var pick = PickRealMic();
             if (pick == null) return "";
             Settings.Set("mic.dev", pick.Id);
             return pick.Id;
+        }
+
+        AudioDevice PickRealMic()
+        {
+            string def = Audio.GetDefaultId(EDataFlow.Capture);
+            var real = captureDevs.Where(d => !IsVirtualMic(d.Name)).ToList();
+            return real.FirstOrDefault(d => d.Id == def)
+                ?? real.FirstOrDefault(d => IsGoXlr(d.Name) && d.Name.StartsWith("Chat Mic", StringComparison.OrdinalIgnoreCase))
+                ?? real.FirstOrDefault(d => d.Name.IndexOf("Headset", StringComparison.OrdinalIgnoreCase) >= 0)
+                ?? real.FirstOrDefault();
+        }
+
+        // The mic to use: the saved one, or the same mic under a new ID. Some USB and wireless headsets (like the Arctis
+        // Pro Wireless) get a new Windows ID when they're plugged in again, often into another USB port. Before 1.9.0 this
+        // fell back to the first device in the list, which can be Stereo Mix (everything you hear) or a virtual mic.
+        string SavedMicId()
+        {
+            string saved = Settings.Get("mic.dev", null);
+            if (saved == null) return RealMicId();
+            if (captureDevs.Any(d => d.Id == saved)) return saved;
+            string name = MicDevices.PlainName(MicDevices.KnownName(saved));
+            var same = name == null ? null : captureDevs.FirstOrDefault(d =>
+                !IsVirtualMic(d.Name) && string.Equals(MicDevices.PlainName(d.Name), name, StringComparison.OrdinalIgnoreCase));
+            if (same != null) { Settings.Set("mic.dev", same.Id); return same.Id; }
+            // Unplugged for now: use another real mic meanwhile, and keep the saved one so it's picked again when it's back.
+            var pick = PickRealMic();
+            return pick != null ? pick.Id : "";
         }
 
         void FillDeviceCombo(ComboBox cb, List<AudioDevice> devs, string selectedId, bool includeDefault)

@@ -36,6 +36,8 @@ namespace SoundDeck
 
             new TestItem("Microphone", "mic.gate", "1.8.4", "Gate", "On the Microphone page, turn on the gate. When you're quiet, background noise should cut out. When you talk, the start of your words shouldn't be cut off."),
             new TestItem("Microphone", "mic.comp", "1.8.4", "Compressor", "Turn on the compressor, then talk quietly and then loudly. Friends should hear a more even volume."),
+            new TestItem("Microphone", "mic.filters", "1.9.0", "Voice processing without Equalizer APO", "With Mic Mix on, tick and untick Clarity boost, Soften harsh \"s\" and Extra boost on the Microphone page while friends (or Hear yourself) listen. Each should change how you sound right away. If you used these before updating, you should sound the same as before, not doubled."),
+            new TestItem("Microphone", "mic.follow", "1.9.0", "Mic follows your headset", "With Mic Mix on, unplug your headset (or its USB base station) and plug it into a different USB port. Within a few seconds the Microphone page should still show your headset mic (not Stereo Mix or another device), and friends should hear you again."),
             new TestItem("Microphone", "mic.hear", "1.7.0", "Hear yourself", "Turn on Hear yourself. You should hear your mic in your headset with very little delay."),
             new TestItem("Microphone", "mic.ptt", "1.7.0", "Push-to-talk", "Set a push-to-talk key. Friends should only hear you while it's held, including while a game is focused."),
 
@@ -56,8 +58,8 @@ namespace SoundDeck
             new TestItem("GoXLR", "gox.faders", "1.7.0", "Faders and mute buttons", "With GoXLR Utility running, moving a GoXLR fader or mute button should change the SoundDeck channel, and the other way around."),
 
             new TestItem("Setup and updates", "setup.page", "1.8.8", "Setup page", "Open the Setup page. Each step should show the right tick or warning for your PC, and its button should do what it says. Steps you finish elsewhere should tick off within a second or two."),
-            new TestItem("Setup and updates", "setup.fresh", "1.8.2", "Fresh setup", "Run SoundDeck-Setup.exe on a PC that doesn't have SoundDeck. It should finish and start SoundDeck, even if it asks you to restart part way."),
-            new TestItem("Setup and updates", "setup.extras", "1.8.9", "Missing extras install", "Settings > Check for updates. If noise removal, Equalizer APO, VB-CABLE or GoXLR Utility is missing, it should offer to install it. Install one: Windows should ask permission and it should finish without an error."),
+            new TestItem("Setup and updates", "setup.fresh", "1.9.0", "Fresh setup", "Run SoundDeck-Setup.exe on a PC that doesn't have SoundDeck. It should finish and start SoundDeck, even if it asks you to restart part way. Noise removal should install without downloading anything, and Equalizer should be unticked."),
+            new TestItem("Setup and updates", "setup.extras", "1.9.0", "Missing extras install", "Settings > Check for updates. If noise removal, VB-CABLE or GoXLR Utility is missing, it should offer to install it (not Equalizer APO any more). Install one: Windows should ask permission and it should finish without an error."),
             new TestItem("Setup and updates", "setup.micback", "1.8.9", "Mic comes back when SoundDeck closes", "With step 4 on the Setup page done, join a call and quit SoundDeck from its tray icon. Friends should still hear you (your normal mic). Open SoundDeck again: within a few seconds they should hear you through SoundDeck."),
             new TestItem("Setup and updates", "upd.auto", "1.8.4", "Updated by itself", "This version arrived through the update check, and the What's new window showed afterwards."),
             new TestItem("Setup and updates", "upd.hotkeys", "1.8.4", "Hotkeys kept", "Hotkeys you had set before updating still work."),

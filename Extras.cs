@@ -1,5 +1,6 @@
 // Missing extras: after each update check, SoundDeck looks for the free add-ons it uses
-// (noise removal, Equalizer APO, VB-CABLE, GoXLR Utility) and offers to install whatever is missing.
+// (noise removal, VB-CABLE, GoXLR Utility) and offers to install whatever is missing. Equalizer APO is only
+// offered when asked for (Equalizer page, Setup page): since 1.9.0 the mic doesn't need it, only headphone EQ does.
 // Every download comes from the project's official site and is checked against a fixed SHA-256.
 
 using System;
@@ -20,6 +21,7 @@ namespace SoundDeck
     {
         public string Key, Name, Why;
         public bool NeedsRestart;
+        public bool OnlyWhenAsked; // never in the "missing parts" prompt; installed from its page's button instead
         public Func<bool> Missing;
         public Action<Action<string>> Install; // runs on a background thread; the callback shows progress
     }
@@ -38,8 +40,8 @@ namespace SoundDeck
                     Why = "Removes fans, keyboard and background noise from your mic. 36 MB from its official GitHub page.",
                     Missing = () => !RnNoise.Available, Install = InstallRnNoise },
                 new Extra {
-                    Key = "apo", Name = "Equalizer (Equalizer APO)", NeedsRestart = true,
-                    Why = "Needed for the Equalizer and voice processing. 11 MB from SourceForge. Windows asks permission, then tick your headset and mic.",
+                    Key = "apo", Name = "Equalizer (Equalizer APO)", NeedsRestart = true, OnlyWhenAsked = true,
+                    Why = "Only for the Equalizer page (headphone tuning). 11 MB from SourceForge. Windows asks permission, then tick your headset and restart.",
                     Missing = () => !EqApo.Installed, Install = InstallApoNow },
                 new Extra {
                     Key = "vbcable", Name = "Virtual mic (VB-CABLE)", NeedsRestart = true,
@@ -57,7 +59,7 @@ namespace SoundDeck
         {
             if (extrasOpen) return;
             bool test = Environment.GetEnvironmentVariable("SOUNDDECK_EXTRAS") != null; // testing aid: list everything
-            var missing = AllExtras().Where(x => test || x.Missing()).ToList();
+            var missing = AllExtras().Where(x => !x.OnlyWhenAsked && (test || x.Missing())).ToList();
             if (!userAsked && !test)
             {
                 missing = missing.Where(x => !Settings.GetBool("extras.skip." + x.Key, false)).ToList();
@@ -210,7 +212,7 @@ namespace SoundDeck
                 string sel = Path.Combine(dir, File.Exists(Path.Combine(dir, "DeviceSelector.exe")) ? "DeviceSelector.exe" : "Configurator.exe");
                 if (File.Exists(sel)) try { Process.Start(new ProcessStartInfo(sel) { Verb = "runas", UseShellExecute = true }); } catch { }
             }
-            say("In the Equalizer APO window, tick your headset and mic, then click OK.");
+            say("In the Equalizer APO window, tick your headset, then click OK.");
         }
 
         static void InstallVbCable(Action<string> say)

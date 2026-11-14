@@ -3,14 +3,14 @@ using System.Reflection;
 
 [assembly: AssemblyTitle("SoundDeck")]
 [assembly: AssemblyProduct("SoundDeck")]
-[assembly: AssemblyVersion("1.8.9.0")]
-[assembly: AssemblyFileVersion("1.8.9.0")]
+[assembly: AssemblyVersion("1.9.0.0")]
+[assembly: AssemblyFileVersion("1.9.0.0")]
 
 namespace SoundDeck
 {
     static class AppVersion
     {
-        public const string Value = "1.8.9";
-        public const string Notes = "Your mic no longer goes silent when SoundDeck is closed. Windows now uses SoundDeck's mic only while Mic Mix is on, and goes back to your real mic when Mic Mix or SoundDeck is off (new tick box on the Mic Mix page).|The Setup page now adds the Stream Deck plugin itself, with no download.|Safer add-on installs: each installer is locked from the moment it's checked until it finishes.|Lighter in the background."; // shown in "What's new" after updating
+        public const string Value = "1.9.0";
+        public const string Notes = "Your mic's voice processing (remove rumble, clarity boost, soften harsh s, extra boost) now runs inside SoundDeck, so Equalizer APO is only needed for the Equalizer page.|New installs include noise removal, so setup no longer downloads 36 MB.|Your mic now follows your headset if Windows gives it a new ID (for example after plugging it into another USB port), and SoundDeck never picks Stereo Mix as your mic.|The old noise suppression plugin option is gone: Remove noise on the Mixer does the same with nothing to set up."; // shown in "What's new" after updating
     }
 }

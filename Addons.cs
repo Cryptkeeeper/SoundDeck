@@ -13,6 +13,9 @@ static class Addons
 {
     public const string RnNoiseUrl = "https://github.com/werman/noise-suppression-for-voice/releases/download/v1.10/win-rnnoise.zip";
     public const string RnNoiseSha = "E4DCC186102850F8DCEBEB766AD1BF34C24F6280BD614EF84B72DAE4783FC517";
+    // win-rnnoise/vst/rnnoise_mono.dll inside that zip. SoundDeckSetup.exe carries this exact file (from redist\),
+    // so new installs don't download the 36 MB zip; the download stays as a fallback.
+    public const string RnNoiseDllSha = "7DEBDFC4843461C47B23AC7A736B4663FE581643563AE764CDE395E006004080";
     // Equalizer APO is unsigned; this hash matches the one Chocolatey publishes for the same file.
     public const string ApoUrl = "https://downloads.sourceforge.net/project/equalizerapo/1.4.2/EqualizerAPO-x64-1.4.2.exe";
     public const string ApoSha = "7403BE7427BBE1936A40DDED082829B6E217FC4F5990FEE5CBA501F0AE055AFA";
@@ -117,8 +120,23 @@ static class Addons
             var lic = z.Entries.FirstOrDefault(e => e.Name.Equals("LICENSE", StringComparison.OrdinalIgnoreCase));
             if (lic != null) lic.ExtractToFile(Path.Combine(dir, "RNNoise-LICENSE.txt"), true);
         }
+        WriteRnNoiseReadme(dir, "It was downloaded from that project's GitHub release " + how + ".");
+    }
+
+    // Puts the copy of noise removal that SoundDeckSetup.exe carries into a folder, after checking it's the exact
+    // official file. license: the license text that ships with it (may be null).
+    public static void WriteRnNoise(byte[] dll, byte[] license, string dir)
+    {
+        Check(dll, RnNoiseDllSha);
+        File.WriteAllBytes(Path.Combine(dir, "rnnoise_mono.dll"), dll);
+        if (license != null) File.WriteAllBytes(Path.Combine(dir, "RNNoise-LICENSE.txt"), license);
+        WriteRnNoiseReadme(dir, "It came with SoundDeck's installer, unchanged from that project's GitHub release. Its licenses are in RNNoise-LICENSE.txt.");
+    }
+
+    static void WriteRnNoiseReadme(string dir, string origin)
+    {
         File.WriteAllText(Path.Combine(dir, "RNNoise-README.txt"),
             "Noise removal uses rnnoise_mono.dll from the open-source project\r\nhttps://github.com/werman/noise-suppression-for-voice (release v1.10).\r\n" +
-            "It was downloaded from that project's GitHub release " + how + ". Source code is available there.\r\n");
+            origin + " Source code is available there.\r\n");
     }
 }
