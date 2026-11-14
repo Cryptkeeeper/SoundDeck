@@ -3,14 +3,14 @@ using System.Reflection;
 
 [assembly: AssemblyTitle("SoundDeck")]
 [assembly: AssemblyProduct("SoundDeck")]
-[assembly: AssemblyVersion("1.9.0.0")]
-[assembly: AssemblyFileVersion("1.9.0.0")]
+[assembly: AssemblyVersion("1.9.1.0")]
+[assembly: AssemblyFileVersion("1.9.1.0")]
 
 namespace SoundDeck
 {
     static class AppVersion
     {
-        public const string Value = "1.9.0";
-        public const string Notes = "Your mic's voice processing (remove rumble, clarity boost, soften harsh s, extra boost) now runs inside SoundDeck, so Equalizer APO is only needed for the Equalizer page.|New installs include noise removal, so setup no longer downloads 36 MB.|Your mic now follows your headset if Windows gives it a new ID (for example after plugging it into another USB port), and SoundDeck never picks Stereo Mix as your mic.|The old noise suppression plugin option is gone: Remove noise on the Mixer does the same with nothing to set up."; // shown in "What's new" after updating
+        public const string Value = "1.9.1";
+        public const string Notes = "The MIC tag on the Mixer page is now grey while Music in mic is off and turns pink when it's on, so you can tell when friends can hear an app like Chrome.|Hover over an app on the Mixer page to see what its MIC tag means."; // shown in "What's new" after updating
     }
 }

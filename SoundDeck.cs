@@ -1003,10 +1003,12 @@ namespace SoundDeck
                 TextRenderer.DrawText(g, chip.Text, chip.Font, tr, chip.ForeColor, TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
                 int x = chip.Width - 4;
                 if (live) { x -= 30; ChipTag(e.Graphics, "LIVE", StreamColor, x, chip.Height); x -= 2; }
-                if (inMic) { x -= 28; ChipTag(e.Graphics, "MIC", MicColor, x, chip.Height); }
+                // Pink only while "Music in mic" is on and friends can actually hear the app; grey otherwise.
+                if (inMic) { x -= 28; ChipTag(e.Graphics, "MIC", mixEngine.MediaOn ? MicColor : MicOffColor, x, chip.Height); }
             };
             chip.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) chip.DoDragDrop(DragPrefix + exe, DragDropEffects.Move); };
-            tips.SetToolTip(chip, a.Pretty + " (" + exe + ".exe). Drag to another channel, onto Mic or Stream, or right-click.");
+            tips.SetToolTip(chip, a.Pretty + " (" + exe + ".exe). Drag to another channel, onto Mic or Stream, or right-click." +
+                (inMic ? "\nMIC: plays in your mic while \"Music in mic\" is on (the tag turns pink)." : ""));
             chip.ContextMenuStrip = AppMenu(exe, channel);
             return chip;
         }
@@ -1716,6 +1718,9 @@ namespace SoundDeck
             mixToggle.BackColor = on ? Color.FromArgb(30, 140, 95) : Card2;
             if (tray != null) tray.Text = on ? "SoundDeck (music in mic: ON)" : "SoundDeck";
             if (control != null) control.Publish("mix", "mix " + (on ? 1 : 0));
+            // The Mixer page's MIC tags turn pink/grey with it.
+            foreach (var zone in zones.Values)
+                foreach (Control c in zone.Controls) c.Invalidate();
         }
 
         void UpdateMixGains()

@@ -120,6 +120,7 @@ namespace SoundDeck
         // ---------- Mic column on the Mixer ----------
 
         static readonly Color MicColor = Color.FromArgb(240, 90, 120);
+        static readonly Color MicOffColor = Color.FromArgb(95, 100, 108); // MIC tag while "Music in mic" is off
         static readonly Color Warn = Color.FromArgb(240, 200, 80);
         MicMeter micMeter = new MicMeter();
         ComboBox mcDev;
