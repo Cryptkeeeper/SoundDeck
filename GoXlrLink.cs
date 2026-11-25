@@ -343,17 +343,17 @@ namespace SoundDeck
         void BuildGoxLinkUi(Panel p)
         {
             int x = 600;
-            goxUtilStatus = Lbl(p, "", x, 486, 9.5f, false, Dim);
+            goxUtilStatus = Lbl(p, "", x, 576, 9.5f, false, Dim);
             goxUtilStatus.MaximumSize = new Size(380, 0);
-            goxLink = Chk(p, "Let SoundDeck control the GoXLR", x, 536);
+            goxLink = Chk(p, "Let SoundDeck control the GoXLR", x, 626);
             goxLink.Checked = Settings.GetBool("goxlr.link", true);
             goxLink.CheckedChanged += (s, e) => { Settings.Set("goxlr.link", goxLink.Checked); ApplyMixer(); };
 
-            Lbl(p, "Faders (left to right)", x, 568, 8.5f, false, Dim);
+            goxFadersLbl = Lbl(p, "Faders (left to right)", x, 658, 8.5f, false, Dim);
             for (int i = 0; i < 4; i++)
             {
                 int fi = i;
-                var cb = Combo(p, x + i * 95, 588, 88);
+                var cb = Combo(p, x + i * 95, 678, 88);
                 cb.DropDownWidth = 140;
                 cb.Items.AddRange(GoxChannels);
                 cb.SelectionChangeCommitted += (s, e) =>
@@ -363,14 +363,14 @@ namespace SoundDeck
                 };
                 goxFaderCombo[i] = cb;
             }
-            goxColors = Btn(p, "Match GoXLR colours to SoundDeck", x, 628, 270, 32);
+            goxColors = Btn(p, "Match GoXLR colours to SoundDeck", x, 718, 270, 32);
             goxColors.Click += (s, e) => MatchGoxColours();
-            goxInstall = Btn(p, "Add GoXLR control (free)", x, 628, 270, 32);
+            goxInstall = Btn(p, "Add GoXLR control (free)", x, 718, 270, 32);
             goxInstall.BackColor = Accent; goxInstall.ForeColor = Color.White;
             goxInstall.Click += (s, e) => InstallGoxUtility();
-            goxStart = Btn(p, "Start GoXLR Utility", x, 628, 270, 32);
+            goxStart = Btn(p, "Start GoXLR Utility", x, 718, 270, 32);
             goxStart.Click += (s, e) => { goxAutoTries = 0; goxAutoNext = DateTime.MinValue; if (!GoxUtil.Start()) lastGoxUi = ""; };
-            goxAuto = Chk(p, "Start GoXLR Utility with SoundDeck (hidden)", x, 672);
+            goxAuto = Chk(p, "Start GoXLR Utility with SoundDeck (hidden)", x, 762);
             goxAuto.Checked = Settings.GetBool("goxlr.autostart", true);
             goxAuto.CheckedChanged += (s, e) => Settings.Set("goxlr.autostart", goxAuto.Checked);
             UpdateGoxUi(null);
@@ -378,6 +378,7 @@ namespace SoundDeck
 
         Button goxStart;
         CheckBox goxAuto;
+        Label goxFadersLbl;
         int goxAutoTries;
         DateTime goxAutoNext;
 
@@ -440,7 +441,7 @@ namespace SoundDeck
             bool installed = goxProbe[0], running = goxProbe[1], official = goxProbe[2];
             string key = (st == null ? "none" : st.Serial + st.DeviceType) + hasDevice + goxInstalling + installed + running + official;
             bool isConnected = st != null;
-            foreach (Control c in new Control[] { goxLink, goxColors }) c.Visible = isConnected;
+            foreach (Control c in new Control[] { goxLink, goxColors, goxFadersLbl }) c.Visible = isConnected;
             foreach (var cb in goxFaderCombo) cb.Visible = isConnected;
             goxInstall.Visible = !isConnected && !goxInstalling && hasDevice && !installed;
             goxStart.Visible = !isConnected && !goxInstalling && hasDevice && installed && !running && !official;

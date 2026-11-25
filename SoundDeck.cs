@@ -660,7 +660,7 @@ namespace SoundDeck
         TrackBar mixMediaVol, mixMicVol;
         Label mixMediaLbl, mixMicLbl, mixCableStatus, mixMicName, mixEngineStatus, mixHotkeyStatus;
         LinkLabel mixCableLink;
-        Label steps;
+        Label steps, mixStepsHead;
         int mixLastStart = -100;
         bool hotkeyOk;
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr hWnd, int id, uint mods, uint vk);
@@ -806,13 +806,14 @@ namespace SoundDeck
             nav.Controls.Add(logo);
             Lbl(nav, "SoundDeck", 52, 23, 13f, true, Fg);
 
+            // Placed by LayoutNav (Layout.cs), which groups them and hides Setup once it's done.
             string[] names = { "Setup", "Mixer", "Equalizer", "Microphone", "Mic Mix", "Streaming", "Soundboard", "Effects", "Ducking", "Profiles", "Settings", "Testing" };
             for (int i = 0; i < names.Length; i++)
             {
                 string name = names[i];
                 var b = new Button
                 {
-                    Text = "   " + name, Left = 10, Top = 80 + i * 46, Width = 160, Height = 40,
+                    Text = "   " + (name == "Setup" ? "Finish setup" : name), Left = 10, Top = 80 + i * 36, Width = 160, Height = 34,
                     FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
                     ForeColor = Fg, BackColor = Card, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 10.5f)
                 };
@@ -825,6 +826,7 @@ namespace SoundDeck
             var ver = Lbl(nav, "No ads. No account.\nNo bloat.", 18, 0, 8.5f, false, Dim);
             ver.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             ver.Top = nav.Height - 50;
+            BuildNavGroups();
         }
 
         Panel NewPage(string name, string title, string subtitle)
@@ -845,11 +847,11 @@ namespace SoundDeck
             {
                 bool on = kv.Key == name;
                 kv.Value.BackColor = on ? Card2 : Card;
-                kv.Value.ForeColor = on ? Accent : Fg;
+                kv.Value.ForeColor = on ? Accent : kv.Key == "Setup" && setupInMenu ? Warn : Fg;
             }
-            if (name == "Microphone") LoadMicLevel();
+            LayoutNav(); // Setup stays in the menu while it's open
+            if (name == "Microphone") { LoadMicLevel(); UpdateMicStatus(); UpdateMicFoldSums(); }
             if (name == "Equalizer") UpdateApoStatus();
-            if (name == "Microphone") UpdateMicStatus();
             if (name == "Setup") UpdateSetup();
         }
 
@@ -857,7 +859,7 @@ namespace SoundDeck
 
         void BuildMixer()
         {
-            var p = NewPage("Mixer", "Mixer", "Drag apps between channels, or onto Mic to play them in your mic. Right-click an app for more options.");
+            var p = NewPage("Mixer", "Mixer", "Drag apps between channels or onto Mic. Right-click an app for more.");
             for (int i = 0; i < 4; i++)
             {
                 int ci = i;
@@ -1240,7 +1242,7 @@ namespace SoundDeck
 
         void BuildEq()
         {
-            var p = NewPage("Equalizer", "Equalizer", "Each output device has its own EQ, so game and chat audio can sound different.");
+            var p = NewPage("Equalizer", "Equalizer", "Each output device has its own EQ.");
             eqStatus = ApoStatus(p, 84);
 
             Lbl(p, "Device", 25, 134, 9.5f, false, Dim);
@@ -1338,7 +1340,7 @@ namespace SoundDeck
 
         void BuildMic()
         {
-            var p = NewPage("Microphone", "Microphone", "Set your mic level and clean up how you sound to others.");
+            var p = NewPage("Microphone", "Microphone", "Everything about how you sound.");
             // Voice processing runs inside SoundDeck (MicFilters.cs), so this says whether friends get it right now.
             micStatus = Lbl(p, "", 25, 84, 9.5f, false, Dim);
             micStatus.MaximumSize = new Size(800, 0);
@@ -1366,18 +1368,20 @@ namespace SoundDeck
                 if (it != null) Audio.SetVolume(it.Id, micLevel.Value / 100f);
             };
 
-            Lbl(p, "Voice processing", 22, 226, 12f, true, Fg);
-            micOn = Chk(p, "Turn on voice processing for this mic", 25, 258);
-            micHp = Chk(p, "Remove low rumble (desk bumps, fans, AC hum)", 45, 288);
-            micClarity = Chk(p, "Clarity boost (helps you cut through in game)", 45, 318);
-            micHarsh = Chk(p, "Soften harsh \"s\" sounds", 45, 348);
-            Lbl(p, "Extra boost", 45, 386, 9.5f, false, Dim);
-            micGain = new Slider { Left = 130, Top = 380, Width = 240, Minimum = 0, Maximum = 12, TickStyle = TickStyle.None, BackColor = Bg };
-            p.Controls.Add(micGain);
-            micGainLbl = Lbl(p, "", 378, 384, 10f, true, Fg);
+            // The rest of the page is folding sections (Layout.cs): noise removal and voice processing here,
+            // then hear yourself, gate and compressor, and push to talk from their own files.
+            BuildNoiseSection();
 
-            var nsNote = Lbl(p, "Noise removal is in the Mic column on the Mixer page.", 45, 426, 9f, false, Dim);
-            nsNote.MaximumSize = new Size(700, 0);
+            var vp = MicFold("voice", "Voice processing", VoiceSummary);
+            micOn = Chk(vp, "Turn on voice processing for this mic", 25, 6);
+            micHp = Chk(vp, "Remove low rumble (desk bumps, fans, AC hum)", 45, 36);
+            micClarity = Chk(vp, "Clarity boost (helps you cut through in game)", 45, 66);
+            micHarsh = Chk(vp, "Soften harsh \"s\" sounds", 45, 96);
+            Lbl(vp, "Extra boost", 45, 134, 9.5f, false, Dim);
+            micGain = new Slider { Left = 130, Top = 128, Width = 240, Minimum = 0, Maximum = 12, TickStyle = TickStyle.None, BackColor = Bg };
+            vp.Controls.Add(micGain);
+            micGainLbl = Lbl(vp, "", 378, 132, 10f, true, Fg);
+            EndMicFold(vp);
 
             micOn.Checked = Settings.GetBool("mic.on", false);
             micHp.Checked = Settings.GetBool("mic.hp", true);
@@ -1392,6 +1396,17 @@ namespace SoundDeck
             micHarsh.CheckedChanged += (s, e) => { Settings.Set("mic.harsh", micHarsh.Checked); ApplyMicFilters(); };
             micGain.ValueChanged += (s, e) => { micGainLbl.Text = "+" + micGain.Value + " dB"; Settings.Set("mic.gain", micGain.Value); ApplyMicFilters(); };
             ApplyMicFilters();
+        }
+
+        string VoiceSummary()
+        {
+            if (!micOn.Checked) return "Off";
+            var on = new List<string>();
+            if (micHp.Checked) on.Add("rumble filter");
+            if (micClarity.Checked) on.Add("clarity");
+            if (micHarsh.Checked) on.Add("soft \"s\"");
+            if (micGain.Value > 0) on.Add("+" + micGain.Value + " dB");
+            return on.Count == 0 ? "On" : "On: " + string.Join(", ", on);
         }
 
         // 1.9.0 moved the mic's voice processing from Equalizer APO into SoundDeck. Once per PC: take the mic section out
@@ -1428,7 +1443,7 @@ namespace SoundDeck
             bool running = mixEngine != null && mixEngine.Running;
             if (!micOn.Checked)
             {
-                micStatus.Text = "Voice processing is off. Tick it below to clean up how you sound. It runs inside SoundDeck, so there's nothing to install.";
+                micStatus.Text = "Voice processing is off. Open it below to clean up how you sound (nothing to install).";
                 micStatus.ForeColor = Dim;
             }
             else if (!running)
@@ -1556,7 +1571,7 @@ namespace SoundDeck
 
         void BuildMicMix()
         {
-            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Harmony hear them. The button below (or a hotkey) turns the music on and off; your voice always goes through.");
+            var p = NewPage("Mic Mix", "Mic Mix", "Play music or videos into your mic so friends in Harmony hear them. Your voice always goes through.");
 
             mixCableStatus = Lbl(p, "", 25, 92, 9.5f, false, Fg);
             mixCableStatus.MaximumSize = new Size(560, 0);
@@ -1630,7 +1645,8 @@ namespace SoundDeck
 
             mixEngineStatus = Lbl(p, "", 25, 534, 9.5f, true, Dim);
 
-            Lbl(p, "One-time setup", 22, 572, 12f, true, Fg);
+            // Only shown until Mic Mix is set up (see TickMicMix).
+            mixStepsHead = Lbl(p, "One-time setup", 22, 572, 12f, true, Fg);
             steps = Lbl(p, "", 25, 602, 9.5f, false, Dim);
             steps.MaximumSize = new Size(800, 0);
 
@@ -1771,6 +1787,7 @@ namespace SoundDeck
                 "2.  Tick \"Turn on Mic Mix\" above. Keep SoundDeck running, because your Harmony mic now goes through it.\n" +
                 "3.  Put Spotify, your browser, etc. in the Media channel on the Mixer page.\n" +
                 (IsSteamCable(cable) ? "Steam's virtual mic is already on your PC, so there's nothing else to install." : "");
+            mixStepsHead.Visible = steps.Visible = cable == null || !mixOn.Checked;
             mixCableStatus.ForeColor = cable != null ? Good : Accent;
             mixCableLink.Visible = cable == null;
 
@@ -1836,7 +1853,7 @@ namespace SoundDeck
 
         void BuildSettings()
         {
-            var p = NewPage("Settings", "Settings", "How SoundDeck starts, updates, and which devices it shows.");
+            var p = NewPage("Settings", "Settings", "Startup, updates and devices.");
             var startup = Chk(p, "Start SoundDeck when Windows starts", 25, 96);
             settingsStartup = startup;
             startup.Checked = IsStartupOn();
@@ -1850,8 +1867,12 @@ namespace SoundDeck
             closeTray.Checked = Settings.GetBool("closeToTray", true);
             closeTray.CheckedChanged += (s, e) => Settings.Set("closeToTray", closeTray.Checked);
 
-            Lbl(p, "Reset", 22, 204, 12f, true, Fg);
-            var reset = Btn(p, "Reset every app's output to default", 25, 236, 280, 32);
+            // Right column, under Updates (Updater.cs). GoXLR (GoXlr.cs) goes below it, only when one is plugged in.
+            Lbl(p, "Setup and reset", 597, 310, 12f, true, Fg);
+            var openSetup = Btn(p, "Open Setup", 600, 342, 150, 32);
+            openSetup.Click += (s, e) => ShowPage("Setup");
+            tips.SetToolTip(openSetup, "Setup leaves the side menu once everything it needs is done. Open it here anytime.");
+            var reset = Btn(p, "Reset every app's output to default", 760, 342, 280, 32);
             reset.Click += (s, e) =>
             {
                 Audio.ClearAppOutputs();
@@ -1862,16 +1883,11 @@ namespace SoundDeck
                 MessageBox.Show(this, "Done. Every app goes back to the Windows default device. Restart apps if they don't switch right away.", "SoundDeck");
             };
 
-            Lbl(p, "Replacing Sonar", 22, 294, 12f, true, Fg);
-            var sonar = Lbl(p, "Happy with SoundDeck? Uninstall SteelSeries GG in Windows Settings > Apps. That also removes Sonar's virtual devices, " +
-                "so pick your headset again in each Mixer channel afterwards.", 25, 324, 9.5f, false, Dim);
-            sonar.MaximumSize = new Size(540, 0);
-
-            Lbl(p, "Outputs", 22, 384, 12f, true, Fg);
-            var outNote = Lbl(p, "Untick devices you don't use to hide them from the Mixer and Stream Deck. " +
-                "Windows keeps them, and nothing already using one is moved.", 25, 414, 9.5f, false, Dim);
+            // (The "Replacing Sonar" note is a Setup step now, shown only while Sonar is still installed.)
+            Lbl(p, "Outputs shown in the Mixer", 22, 204, 12f, true, Fg);
+            var outNote = Lbl(p, "Untick devices you don't use to hide them. Windows keeps them.", 25, 234, 9.5f, false, Dim);
             outNote.MaximumSize = new Size(540, 0);
-            outputsPanel = new FlowLayoutPanel { Left = 25, Top = 460, Width = 780, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Color.Transparent, Padding = new Padding(0, 0, 0, 20) };
+            outputsPanel = new FlowLayoutPanel { Left = 25, Top = 264, Width = 540, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Color.Transparent, Padding = new Padding(0, 0, 0, 20) };
             p.Controls.Add(outputsPanel);
         }
 
@@ -2019,7 +2035,8 @@ namespace SoundDeck
             TickEffectsStatus();
             TickGoxAutostart();
             if (pages["Setup"].Visible) UpdateSetup();
-            if (pages["Microphone"].Visible) UpdateMicStatus();
+            if (tickCount % 2 == 0) TickSetupInMenu();
+            if (pages["Microphone"].Visible) { UpdateMicStatus(); UpdateMicFoldSums(); }
             TickProfiles();
             LoadMicColumn();
             Settings.SaveIfDirty();

@@ -1,4 +1,4 @@
-// "Gate & compressor" section on the Microphone page, right after Voice processing.
+// "Gate and compressor" section on the Microphone page.
 
 using System;
 using System.Drawing;
@@ -14,19 +14,14 @@ namespace SoundDeck
 
         void BuildDynamicsUi()
         {
-            var p = pages["Microphone"];
-            // Make room after Voice processing: Hear yourself and Push to talk move down. (-10 below: this
-            // section was laid out for y = 540, and it starts at 530 here.)
-            const int Room = 440, SectionTop = 530;
-            p.SuspendLayout();
-            foreach (Control c in p.Controls) if (c.Top >= SectionTop - 10) c.Top += Room;
-            BuildDynamicsAt(p, SectionTop - 540);
-            p.ResumeLayout();
+            var p = MicFold("dyn", "Gate and compressor", () =>
+                gateOn.Checked && compOn.Checked ? "Gate and compressor on" : gateOn.Checked ? "Gate on" : compOn.Checked ? "Compressor on" : "Off");
+            BuildDynamicsAt(p, -564); // laid out for y = 568 at the top of the section
+            EndMicFold(p);
         }
 
         void BuildDynamicsAt(Panel p, int dy)
         {
-            Lbl(p, "Gate & compressor", 22, 540 + dy, 12f, true, Fg);
             var note = Lbl(p, "For your mic: evens out your volume and silences it between words. Applies to what friends and your stream hear. Needs Mic Mix on.", 25, 568 + dy, 9f, false, Dim);
             note.MaximumSize = new Size(760, 0);
 

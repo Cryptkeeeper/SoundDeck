@@ -28,13 +28,13 @@ namespace SoundDeck
 
         void BuildPushToTalk()
         {
-            var p = pages["Microphone"];
-            Lbl(p, "Push to talk", 22, 770, 12f, true, Fg);
-            var note = Lbl(p, "Mutes your mic everywhere (Harmony, games, your stream) unless you hold a key or mouse button. Works while you're in a game.", 25, 798, 9f, false, Dim);
+            var p = MicFold("ptt", "Push to talk", () => pttMode.SelectedIndex == 0 ? "Off"
+                : (pttMode.SelectedIndex == 1 ? "Push to talk" : "Push to mute") + ", " + PttKeyText(Settings.GetInt("ptt.vk", 0)));
+            var note = Lbl(p, "Mutes your mic everywhere (Harmony, games, your stream) unless you hold a key or mouse button. Works while you're in a game.", 25, 4, 9f, false, Dim);
             note.MaximumSize = new Size(760, 0);
 
-            Lbl(p, "Mode", 25, 836, 9.5f, false, Dim);
-            pttMode = Combo(p, 150, 832, 330);
+            Lbl(p, "Mode", 25, 42, 9.5f, false, Dim);
+            pttMode = Combo(p, 150, 38, 330);
             foreach (var m in PttModes) pttMode.Items.Add(m);
             pttMode.SelectedIndex = Clamp(Settings.GetInt("ptt.mode", 0), 0, 2);
             pttMode.SelectedIndexChanged += (s, e) =>
@@ -45,8 +45,8 @@ namespace SoundDeck
                 UpdatePttTimer();
             };
 
-            Lbl(p, "Key", 25, 878, 9.5f, false, Dim);
-            pttKeyBox = new TextBox { Left = 150, Top = 874, Width = 220, BackColor = Card2, ForeColor = Fg, BorderStyle = BorderStyle.FixedSingle, ReadOnly = true, Cursor = Cursors.Hand };
+            Lbl(p, "Key", 25, 84, 9.5f, false, Dim);
+            pttKeyBox = new TextBox { Left = 150, Top = 80, Width = 220, BackColor = Card2, ForeColor = Fg, BorderStyle = BorderStyle.FixedSingle, ReadOnly = true, Cursor = Cursors.Hand };
             pttKeyBox.Text = PttKeyText(Settings.GetInt("ptt.vk", 0));
             pttKeyBox.Enter += (s, e) => pttKeyBox.BackColor = Color.FromArgb(70, 50, 40);
             pttKeyBox.Leave += (s, e) => pttKeyBox.BackColor = Card2;
@@ -68,11 +68,11 @@ namespace SoundDeck
                 p.Focus();
             };
             p.Controls.Add(pttKeyBox);
-            Lbl(p, "Click the box, then press a key or a mouse side button. Backspace clears it.", 380, 878, 8.5f, false, Dim);
+            Lbl(p, "Click the box, then press a key or a mouse side button. Backspace clears it.", 380, 84, 8.5f, false, Dim);
 
-            pttStatus = Lbl(p, "", 25, 916, 10f, true, Dim);
-            Lbl(p, "There's also a Push to talk key for the Stream Deck.", 25, 942, 8.5f, false, Dim);
-            new Panel { Parent = p, Left = 0, Top = 966, Width = 10, Height = 30, BackColor = Bg }; // bottom padding when scrolling
+            pttStatus = Lbl(p, "", 25, 122, 10f, true, Dim);
+            Lbl(p, "There's also a Push to talk key for the Stream Deck.", 25, 148, 8.5f, false, Dim);
+            EndMicFold(p);
 
             pttTimer = new Timer { Interval = 15 };
             pttTimer.Tick += (s, e) => TickPushToTalk();

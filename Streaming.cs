@@ -34,7 +34,7 @@ namespace SoundDeck
 
         void BuildStreaming()
         {
-            var p = NewPage("Streaming", "Streaming", "SoundDeck makes a second mic just for your stream, so Harmony and your stream each get their own mix, and you can mute yourself in Harmony while your stream still hears you.");
+            var p = NewPage("Streaming", "Streaming", "Gives your stream its own mic and mix, so you can mute yourself in Harmony while your stream still hears you.");
 
             stOn = Chk(p, "Turn on streamer mode", 25, 104);
             stOn.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);

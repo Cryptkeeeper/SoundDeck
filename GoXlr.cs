@@ -42,21 +42,24 @@ namespace SoundDeck
         void BuildGoXlr(Panel p)
         {
             int x = 600;
-            Lbl(p, "GoXLR", x - 3, 310, 12f, true, Fg);
-            goxStatus = Lbl(p, "", x, 340, 9.5f, false, Dim);
+            goxHead = Lbl(p, "GoXLR", x - 3, 400, 12f, true, Fg);
+            goxStatus = Lbl(p, "", x, 430, 9.5f, false, Dim);
             goxStatus.MaximumSize = new Size(380, 0);
-            goxSetup = Btn(p, "Set up GoXLR", x, 436, 170, 32);
+            goxSetup = Btn(p, "Set up GoXLR", x, 526, 170, 32);
             goxSetup.Click += (s, e) => SetupGoXlr(true);
             UpdateGoXlr();
         }
 
+        Label goxHead;
+
         void UpdateGoXlr()
         {
             if (goxStatus == null) return;
+            // The whole GoXLR section only shows while one is plugged in.
+            goxHead.Visible = goxStatus.Visible = HasGoXlr;
             if (!HasGoXlr)
             {
-                goxStatus.Text = "No GoXLR connected. Plug it in and this section lets you set it up in one click.";
-                goxStatus.ForeColor = Dim;
+                goxStatus.Text = "";
                 goxSetup.Visible = false;
                 return;
             }

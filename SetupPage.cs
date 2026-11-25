@@ -39,7 +39,7 @@ namespace SoundDeck
 
         void BuildSetup()
         {
-            var p = NewPage("Setup", "Setup", "Everything SoundDeck needs, in order. Steps tick themselves off when they're done; the button next to each one does it for you or takes you to the right place.");
+            var p = NewPage("Setup", "Setup", "Everything SoundDeck needs, in order. Steps tick themselves off when they're done.");
             setupProgress = Lbl(p, "", 25, 96, 11f, true, Fg);
 
             setupSteps = new List<SetupStep>
@@ -112,6 +112,12 @@ namespace SoundDeck
                     How = "Only if you stream: gives OBS or Streamlabs its own mix, so you can mute yourself in Harmony while your stream still hears you.",
                     Done = () => StreamerOn,
                     Act = () => ShowPage("Streaming") },
+                new SetupStep {
+                    Title = "Remove SteelSeries Sonar", Kind = StepKind.Optional, ButtonText = "Open Apps",
+                    How = "Happy with SoundDeck? Uninstall SteelSeries GG in Windows Settings > Apps. That also removes Sonar's virtual devices, so pick your headset again in each Mixer channel afterwards.",
+                    Show = () => renderDevs.Any(d => d.Name.IndexOf("Sonar", StringComparison.OrdinalIgnoreCase) >= 0),
+                    Done = () => false,
+                    Act = () => Process.Start("ms-settings:appsfeatures") },
             };
 
             foreach (var st in setupSteps)

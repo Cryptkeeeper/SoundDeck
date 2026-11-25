@@ -181,28 +181,17 @@ namespace SoundDeck
                 LoadMicColumn();
             };
 
-            Lbl(card, "Background noise", 14, 292, 8.5f, false, Dim);
-            mcNoise = Lbl(card, "", 12, 312, 14f, true, Dim);
-            mcNoiseDb = Lbl(card, "", 14, 342, 9f, false, Dim);
-            mcHint = Lbl(card, "", 14, 372, 8.5f, false, Dim);
-            mcHint.MaximumSize = new Size(156, 0);
             tips.SetToolTip(mcMeter, "Your mic level. The white line is your background noise; your voice should be well above it.");
 
-            mcNs = Chk(card, "Remove noise", 12, 436);
-            mcNs.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            mcNs.Checked = Settings.GetBool("ns.on", true);
-            mcNs.CheckedChanged += (s, e) => { Settings.Set("ns.on", mcNs.Checked); ApplyNoiseRemoval(); };
-            Lbl(card, "Strength", 14, 466, 8.5f, false, Dim);
-            mcNsStrength = new Slider { Left = 6, Top = 478, Width = 168, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Card, Value = Clamp(Settings.GetInt("ns.strength", 60), 0, 100) };
-            card.Controls.Add(mcNsStrength);
-            mcNsStrength.ValueChanged += (s, e) => { Settings.Set("ns.strength", mcNsStrength.Value); ApplyNoiseRemoval(); };
-            tips.SetToolTip(mcNsStrength, "Higher cuts more background sound between and around your words. Too high can clip the start of quiet words.");
-            mcNsStatus = Lbl(card, "", 14, 524, 8f, false, Dim);
-            mcNsStatus.MaximumSize = new Size(156, 0);
+            // Noise removal itself (and the background-noise readout) is on the Microphone page.
+            mcNsLine = Lbl(card, "", 14, 292, 9f, true, Dim);
+            mcNsLine.MaximumSize = new Size(156, 0);
+            mcNsLine.Cursor = Cursors.Hand;
+            mcNsLine.Click += (s, e) => ShowMicFold("noise");
+            tips.SetToolTip(mcNsLine, "Click to change noise removal on the Microphone page.");
 
             var settings = Btn(card, "Mic settings", 12, 556, 156, 28);
             settings.Click += (s, e) => ShowPage("Microphone");
-            ApplyNoiseRemoval();
 
             // Drop an app here to put it in your chat mic (plays when music-in-mic is on).
             tips.SetToolTip(card, "Drag an app here to play it in your mic when music-in-mic is on. Right-click an app to remove it.");
@@ -211,7 +200,38 @@ namespace SoundDeck
 
         CheckBox mcNs;
         TrackBar mcNsStrength;
-        Label mcNsStatus;
+        Label mcNsStatus, mcNsPct, mcNsLine;
+        LevelMeter micPageMeter;
+
+        // "Noise removal" section on the Microphone page (built from BuildMic).
+        void BuildNoiseSection()
+        {
+            var b = MicFold("noise", "Noise removal", () => !RnNoise.Available ? "Missing" : mcNs.Checked ? "On, " + mcNsStrength.Value + "%" : "Off");
+            mcNs = Chk(b, "Remove noise", 25, 6);
+            mcNs.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+            mcNs.Checked = Settings.GetBool("ns.on", true);
+            mcNs.CheckedChanged += (s, e) => { Settings.Set("ns.on", mcNs.Checked); ApplyNoiseRemoval(); };
+            mcNsStatus = Lbl(b, "", 160, 8, 9.5f, true, Dim);
+
+            Lbl(b, "Strength", 45, 46, 9.5f, false, Dim);
+            mcNsStrength = new Slider { Left = 150, Top = 40, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("ns.strength", 60), 0, 100) };
+            b.Controls.Add(mcNsStrength);
+            mcNsPct = Lbl(b, mcNsStrength.Value + "%", 456, 44, 10f, true, Fg);
+            mcNsStrength.ValueChanged += (s, e) => { mcNsPct.Text = mcNsStrength.Value + "%"; Settings.Set("ns.strength", mcNsStrength.Value); ApplyNoiseRemoval(); };
+            tips.SetToolTip(mcNsStrength, "Higher cuts more background sound between and around your words. Too high can clip the start of quiet words.");
+
+            Lbl(b, "Your mic", 45, 86, 9.5f, false, Dim);
+            micPageMeter = new LevelMeter(MicColor) { Horizontal = true, Left = 150, Top = 91, Width = 300, Height = 8 };
+            b.Controls.Add(micPageMeter);
+            tips.SetToolTip(micPageMeter, "Your mic level. The white line is your background noise; your voice should be well above it.");
+            Lbl(b, "Background", 45, 118, 9.5f, false, Dim);
+            mcNoise = Lbl(b, "", 150, 116, 10f, true, Dim);
+            mcNoiseDb = Lbl(b, "", 262, 118, 9.5f, false, Dim);
+            mcHint = Lbl(b, "", 150, 142, 8.5f, false, Dim);
+            mcHint.MaximumSize = new Size(640, 0);
+            EndMicFold(b);
+            ApplyNoiseRemoval();
+        }
 
         void ApplyNoiseRemoval()
         {
@@ -224,13 +244,14 @@ namespace SoundDeck
         void UpdateNoiseStatus()
         {
             if (mcNsStatus == null) return;
-            string text; Color color = Dim;
-            if (!RnNoise.Available) { text = "rnnoise_mono.dll is missing from SoundDeck's folder."; color = Accent; }
-            else if (!mcNs.Checked) text = "Off. Friends hear your mic as it is.";
-            else if (!mixEngine.Running) { text = "Turn on Mic Mix so friends get the clean mic."; color = Warn; }
-            else { text = "On. Friends hear the clean mic."; color = Good; }
+            string text, line; Color color = Dim;
+            if (!RnNoise.Available) { text = "rnnoise_mono.dll is missing from SoundDeck's folder."; line = "Noise removal missing"; color = Accent; }
+            else if (!mcNs.Checked) { text = "Friends hear your mic as it is."; line = "Noise removal off"; }
+            else if (!mixEngine.Running) { text = "Turn on Mic Mix so friends get the clean mic."; line = "Noise removal waiting for Mic Mix"; color = Warn; }
+            else { text = "Friends hear the clean mic."; line = "Noise removal on"; color = Good; }
             mcNsStatus.Text = text;
             mcNsStatus.ForeColor = color;
+            if (mcNsLine != null && mcNsLine.Text != line) { mcNsLine.Text = line; mcNsLine.ForeColor = color; }
         }
 
         void FillMicColumn()
@@ -275,12 +296,14 @@ namespace SoundDeck
 
         static float Db(float rms) { return rms <= 0.000001f ? -120f : (float)(20 * Math.Log10(rms)); }
 
-        // Runs the mic listener only while the Mixer is on screen, and updates the meter and noise readout.
+        // Runs the mic listener only while its meters are on screen (the Mixer's Mic column, or Noise removal on the
+        // Microphone page), and updates the meters and the background-noise readout.
         void TickMicColumn(bool onScreen)
         {
-            if (mcDev == null) return;
+            if (mcDev == null || micPageMeter == null) return;
             var mic = micDevice.SelectedItem as DeviceItem;
-            bool want = onScreen && pages["Mixer"].Visible && mic != null && !IsVirtualMic(mic.Name);
+            bool shown = pages["Mixer"].Visible || (pages["Microphone"].Visible && MicFoldOpen("noise"));
+            bool want = onScreen && shown && mic != null && !IsVirtualMic(mic.Name);
             if (!want) { if (micMeter.Running || micMeter.DeviceId != null) micMeter.Stop(); return; }
             if (micMeter.DeviceId != mic.Id || (!micMeter.Running && (DateTime.Now - mcStarted).TotalSeconds > 3))
             {
@@ -290,16 +313,17 @@ namespace SoundDeck
 
             mcLevel = Math.Max(MeterPos(micMeter.TakePeak()), mcLevel - 0.04f);
             mcMeter.Value = mcLevel;
+            micPageMeter.Value = mcLevel;
 
             float noise = micMeter.Noise;
-            if (noise <= 0) { mcMeter.Marker = -1; mcNoise.Text = "Listening..."; mcNoise.ForeColor = Dim; mcNoiseDb.Text = ""; mcHint.Text = ""; return; }
+            if (noise <= 0) { mcMeter.Marker = micPageMeter.Marker = -1; mcNoise.Text = "Listening..."; mcNoise.ForeColor = Dim; mcNoiseDb.Text = ""; mcHint.Text = ""; return; }
             float db = Db(noise);
-            mcMeter.Marker = MeterPos(noise);
+            mcMeter.Marker = micPageMeter.Marker = MeterPos(noise);
             mcNoiseDb.Text = db <= -100 ? "" : Math.Round(db) + " dB";
             if (mcMute.Text == "Muted") { mcNoise.Text = "Muted"; mcNoise.ForeColor = Dim; mcHint.Text = ""; }
             else if (db < -60) { mcNoise.Text = "Quiet"; mcNoise.ForeColor = Good; mcHint.Text = ""; }
-            else if (db < -45) { mcNoise.Text = "Some noise"; mcNoise.ForeColor = Warn; mcHint.Text = mcNs.Checked ? "Remove noise is cleaning this up." : "A little hum or fan noise. Turn on Remove noise below."; }
-            else { mcNoise.Text = "Noisy"; mcNoise.ForeColor = Accent; mcHint.Text = mcNs.Checked ? "Remove noise is cleaning this up. Raise Strength if friends still hear it." : "Friends can hear this. Turn on Remove noise below."; }
+            else if (db < -45) { mcNoise.Text = "Some noise"; mcNoise.ForeColor = Warn; mcHint.Text = mcNs.Checked ? "Remove noise is cleaning this up." : "A little hum or fan noise. Turn on Remove noise above."; }
+            else { mcNoise.Text = "Noisy"; mcNoise.ForeColor = Accent; mcHint.Text = mcNs.Checked ? "Remove noise is cleaning this up. Raise Strength if friends still hear it." : "Friends can hear this. Turn on Remove noise above."; }
         }
 
         // ---------- Auto-ducking ----------
@@ -313,7 +337,7 @@ namespace SoundDeck
 
         void BuildDucking()
         {
-            var p = NewPage("Ducking", "Auto-ducking", "When someone talks in your Chat channel (Harmony, etc.), SoundDeck turns other audio down so you can hear them, then brings it back.");
+            var p = NewPage("Ducking", "Auto-ducking", "Turns other audio down while someone talks in your Chat channel, then brings it back.");
 
             duckOn = Chk(p, "Turn on auto-ducking", 25, 96);
             duckOn.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
@@ -426,20 +450,19 @@ namespace SoundDeck
 
         void BuildHearYourself()
         {
-            var p = pages["Microphone"];
-            Lbl(p, "Hear yourself", 22, 530, 12f, true, Fg);
-            Lbl(p, "Plays your mic in your headset so you can hear how loud you are. Use headphones, or you'll get echo.", 25, 558, 9f, false, Dim);
+            var p = MicFold("hear", "Hear yourself", () => sideOn.Checked ? "On, " + sideVol.Value + "%" : "Off");
+            Lbl(p, "Plays your mic in your headset so you can hear how loud you are. Use headphones, or you'll get echo.", 25, 4, 9f, false, Dim);
 
-            sideOn = Chk(p, "Hear my mic", 25, 588);
+            sideOn = Chk(p, "Hear my mic", 25, 34);
             sideOn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             sideOn.Checked = Settings.GetBool("side.on", false);
             sideOn.CheckedChanged += (s, e) => { Settings.Set("side.on", sideOn.Checked); TickHearYourself(); PublishHearYourself(); };
-            sideStatus = Lbl(p, "", 160, 590, 9f, false, Dim);
+            sideStatus = Lbl(p, "", 160, 36, 9f, false, Dim);
 
-            Lbl(p, "Level", 25, 628, 9.5f, false, Dim);
-            sideVol = new Slider { Left = 150, Top = 622, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("side.vol", 50), 0, 100) };
+            Lbl(p, "Level", 25, 74, 9.5f, false, Dim);
+            sideVol = new Slider { Left = 150, Top = 68, Width = 300, Minimum = 0, Maximum = 100, TickStyle = TickStyle.None, BackColor = Bg, Value = Clamp(Settings.GetInt("side.vol", 50), 0, 100) };
             p.Controls.Add(sideVol);
-            sideVolLbl = Lbl(p, sideVol.Value + "%", 456, 626, 10f, true, Fg);
+            sideVolLbl = Lbl(p, sideVol.Value + "%", 456, 72, 10f, true, Fg);
             sideVol.ValueChanged += (s, e) =>
             {
                 sideVolLbl.Text = sideVol.Value + "%";
@@ -448,8 +471,8 @@ namespace SoundDeck
             };
             sideEngine.Gain = sideVol.Value / 100f;
 
-            Lbl(p, "Hear it on", 25, 670, 9.5f, false, Dim);
-            sideDev = Combo(p, 150, 666, 300);
+            Lbl(p, "Hear it on", 25, 116, 9.5f, false, Dim);
+            sideDev = Combo(p, 150, 112, 300);
             sideDev.SelectedIndexChanged += (s, e) =>
             {
                 if (loading) return;
@@ -458,11 +481,12 @@ namespace SoundDeck
                 TickHearYourself();
             };
 
-            Lbl(p, "Hotkey", 25, 712, 9.5f, false, Dim);
-            sideHotkeyBox = HotkeyBox(p, 150, 708, "side", 0, 0, SideHotkeyId, RegisterSideHotkey);
-            sideHotkeyStatus = Lbl(p, "Click the box, then press your keys. Backspace clears it.", 380, 712, 8.5f, false, Dim);
+            Lbl(p, "Hotkey", 25, 158, 9.5f, false, Dim);
+            sideHotkeyBox = HotkeyBox(p, 150, 154, "side", 0, 0, SideHotkeyId, RegisterSideHotkey);
+            sideHotkeyStatus = Lbl(p, "Click the box, then press your keys. Backspace clears it.", 380, 158, 8.5f, false, Dim);
             FillOutCombo(sideDev, "side.dev");
             RegisterSideHotkey();
+            EndMicFold(p);
         }
 
         // Click-to-record hotkey box shared by the newer features.
@@ -639,7 +663,7 @@ namespace SoundDeck
 
         void BuildSoundboard()
         {
-            var p = NewPage("Soundboard", "Soundboard", "Click a sound to play it for you and your friends. Right-click to change it. Sounds work from your Stream Deck too.");
+            var p = NewPage("Soundboard", "Soundboard", "Click a sound to play it. Right-click to change it.");
 
             for (int i = 0; i < SoundSlots; i++)
             {
@@ -830,7 +854,7 @@ namespace SoundDeck
 
         void BuildProfiles()
         {
-            var p = NewPage("Profiles", "Profiles", "Save your volumes, outputs, ducking and Mic Mix levels as a profile. Switch with one click, from your Stream Deck, or automatically when a game starts.");
+            var p = NewPage("Profiles", "Profiles", "Save your volumes, outputs and levels. Switch with one click, from your Stream Deck, or when a game starts.");
 
             profList = new ListBox { Left = 25, Top = 96, Width = 300, Height = 300, BackColor = Card, ForeColor = Fg, BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 11f), IntegralHeight = false };
             p.Controls.Add(profList);
