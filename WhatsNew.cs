@@ -13,11 +13,15 @@ namespace SoundDeck
     partial class MainForm
     {
         bool whatsNewPending;
+        string whatsNewFrom;   // the version that was running before this update ("old" = from before 1.8.4)
 
         void CheckWhatsNew()
         {
             string last = Settings.Get("app.lastver", Settings.Existed ? "old" : AppVersion.Value);
-            bool test = Environment.GetEnvironmentVariable("SOUNDDECK_WHATSNEW") != null; // testing aid
+            // Testing aid: SOUNDDECK_WHATSNEW=1 shows the window; =1.9.0 shows it as if updating from 1.9.0.
+            string testFrom = Environment.GetEnvironmentVariable("SOUNDDECK_WHATSNEW");
+            bool test = testFrom != null;
+            whatsNewFrom = test ? testFrom : last;
             if (!test)
             {
                 if (Updater.IsDevCopy) return;
@@ -42,34 +46,14 @@ namespace SoundDeck
             tray.BalloonTipClicked += (s, e) => { if (whatsNewPending) { whatsNewPending = false; ShowWindow(); ShowWhatsNew(); } };
         }
 
+        // Lists every version since the one that was running before (ReleaseNotes.cs), newest first.
         void ShowWhatsNew()
         {
             whatsNewPending = false;
-            using (var f = new Form())
-            {
-                f.Text = "What's new";
-                f.FormBorderStyle = FormBorderStyle.FixedDialog; f.MaximizeBox = false; f.MinimizeBox = false; f.ShowInTaskbar = false;
-                f.StartPosition = FormStartPosition.CenterParent;
-                f.BackColor = Bg; f.ForeColor = Fg; f.Font = new Font("Segoe UI", 9.5f);
-                f.ClientSize = new Size(480, 200);
-                f.HandleCreated += (s, e) => { try { int on = 1; DwmSetWindowAttribute(f.Handle, 20, ref on, 4); } catch { } };
-
-                var title = Lbl(f, "SoundDeck " + AppVersion.Value, 20, 16, 15f, true, Fg);
-                var sub = Lbl(f, "You've been updated. Here's what's new:", 22, 50, 9.5f, false, Dim);
-                string notes = AppVersion.Notes.Trim();
-                if (notes == "") notes = "Fixes and small improvements.";
-                notes = string.Join("\n", notes.Split('\n').Select(l => l.Trim()).Where(l => l != "").Select(l => l.StartsWith("-") || l.StartsWith("•") ? "•  " + l.TrimStart('-', '•', ' ') : "•  " + l));
-                var body = Lbl(f, notes, 22, 80, 10f, false, Fg);
-                body.MaximumSize = new Size(436, 0);
-                int bottom = body.Bottom + 24;
-                var ok = Btn(f, "Got it", 360, bottom, 100, 32);
-                ok.BackColor = Accent; ok.ForeColor = Color.White;
-                ok.DialogResult = DialogResult.OK;
-                f.AcceptButton = ok; f.CancelButton = ok;
-                f.ClientSize = new Size(480, ok.Bottom + 16);
-                Look.Apply(f);
-                f.ShowDialog(this);
-            }
+            var missed = ReleaseNotes.Missed(ReleaseNotes.Load(), whatsNewFrom, AppVersion.Value, AppVersion.Notes);
+            Version v;
+            string from = Version.TryParse(whatsNewFrom ?? "", out v) ? whatsNewFrom : null;
+            using (var f = ReleaseNotes.BuildDialog(missed, AppVersion.Value, from)) f.ShowDialog(this);
         }
     }
 }

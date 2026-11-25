@@ -73,6 +73,14 @@ $csNotes = (($Notes -replace '\\', '\\') -replace '"', '\"') -replace "`r?`n", '
 $src = [regex]::Replace($src, 'Notes = "(?:[^"\\]|\\.)*";', { param($m) "Notes = ""$csNotes"";" })
 [IO.File]::WriteAllText($verFile, $src, (New-Object Text.UTF8Encoding $false))
 Write-Host "Version set to $Version"
+# Every version's notes, newest first, also go into the exe (ReleaseNotes.txt), so "What's new" can list
+# each version someone skipped. Republishing a version replaces its line.
+$histFile = Join-Path $root "ReleaseNotes.txt"
+$hist = if (Test-Path $histFile) { [IO.File]::ReadAllLines($histFile) } else { @() }
+$comments = @($hist | Where-Object { $_ -like '#*' })
+$older = @($hist | Where-Object { $_ -notlike '#*' -and $_.Trim() -ne '' -and $_ -notlike "$Version=*" })
+$entry = "$Version=" + (($Notes -replace "`r?`n", '|').Trim())
+[IO.File]::WriteAllLines($histFile, [string[]]($comments + @($entry) + $older), (New-Object Text.UTF8Encoding $false))
 
 # 2. Build SoundDeck, the Stream Deck plugin and the installer.
 # Close SoundDeck so its exe can be rebuilt (a running exe can't be overwritten).

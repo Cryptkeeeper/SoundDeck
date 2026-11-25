@@ -3,14 +3,14 @@ using System.Reflection;
 
 [assembly: AssemblyTitle("SoundDeck")]
 [assembly: AssemblyProduct("SoundDeck")]
-[assembly: AssemblyVersion("1.9.3.0")]
-[assembly: AssemblyFileVersion("1.9.3.0")]
+[assembly: AssemblyVersion("1.9.4.0")]
+[assembly: AssemblyFileVersion("1.9.4.0")]
 
 namespace SoundDeck
 {
     static class AppVersion
     {
-        public const string Value = "1.9.3";
-        public const string Notes = "A tidier window: the side menu is grouped into Listen, Talk and Stream, and Setup leaves it once everything's done (Settings > Open Setup brings it back).|The Microphone page folds into sections you open with a click. Noise removal moved there too, with a live bar showing your voice against the background noise; the Mixer's Mic column just says whether it's on.|Settings only shows the GoXLR part while a GoXLR is plugged in."; // shown in "What's new" after updating
+        public const string Value = "1.9.4";
+        public const string Notes = "If you skip an update, What's new now lists every version you missed, newest first, instead of only the latest.|What's new shows each change as its own bullet point."; // shown in "What's new" after updating
     }
 }
