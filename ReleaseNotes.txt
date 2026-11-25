@@ -1,6 +1,7 @@
 # Release notes for every version, newest first: <version>=<line>|<line>|...
 # publish-update.ps1 adds the new version at the top. Built into SoundDeck.exe, so "What's new" can
 # list every version someone skipped.
+1.9.5=Your outputs, Hear yourself and EQ now follow your headset when Windows gives it a new ID (after a Windows update or plugging it into another USB port), like the mic already did.|The Equalizer page tells you when Equalizer APO isn't set up on the device you picked, with a button to set it up.
 1.9.4=If you skip an update, What's new now lists every version you missed, newest first, instead of only the latest.|What's new shows each change as its own bullet point.
 1.9.3=A tidier window: the side menu is grouped into Listen, Talk and Stream, and Setup leaves it once everything's done (Settings > Open Setup brings it back).|The Microphone page folds into sections you open with a click. Noise removal moved there too, with a live bar showing your voice against the background noise; the Mixer's Mic column just says whether it's on.|Settings only shows the GoXLR part while a GoXLR is plugged in.
 1.9.2=Your mic is found again even when Windows forgets your headset's old ID (for example after a Windows update or plugging it into another USB port): SoundDeck now remembers the mic's name too.

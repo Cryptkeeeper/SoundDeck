@@ -726,6 +726,7 @@ namespace SoundDeck
             tick.Start();
             apoDebounce = new Timer { Interval = 350 };
             apoDebounce.Tick += (s, e) => { apoDebounce.Stop(); WriteApo(); };
+            if (apoWriteWaiting) apoDebounce.Start(); // the first device scan moved EQ settings to a new device ID
             StartControlServer();
             OnTick();
             fast = new Timer { Interval = 50 };
@@ -1334,6 +1335,7 @@ namespace SoundDeck
             }
             LoadHeadphoneLabel();
             loading = prev;
+            UpdateApoStatus(); // is Equalizer APO on this device?
         }
 
         // ---------- Microphone ----------
@@ -1480,7 +1482,7 @@ namespace SoundDeck
             l.MaximumSize = new Size(560, 0);
             var btn = Btn(p, "Install Equalizer APO (free)", 600, top - 4, 230, 30);
             btn.BackColor = Accent; btn.ForeColor = Color.White;
-            btn.Click += (s, e) => InstallApo();
+            btn.Click += (s, e) => { if (EqApo.Installed) SetUpApoOnDevice(); else InstallApo(); };
             l.Tag = btn;
             return l;
         }
@@ -1518,12 +1520,43 @@ namespace SoundDeck
         {
             bool ok = EqApo.Installed;
             var l = eqStatus;
-            l.ForeColor = ok ? Good : Accent;
-            l.Text = ok
-                ? "Equalizer APO is ready. No effect on a device? Tick it in the Equalizer APO Configurator, then restart."
-                : "The Equalizer needs Equalizer APO (free, open source, no ads). Click the button to install it; Windows asks permission once, then tick your headset and restart.";
-            ((Control)l.Tag).Visible = !ok;
-            ((Control)l.Tag).Enabled = !apoInstalling;
+            var btn = (Button)l.Tag;
+            // Equalizer APO works per device. When Windows sees a headset as a new device, it isn't on the new one yet.
+            var it = eqDevice == null ? null : eqDevice.SelectedItem as DeviceItem;
+            bool? onDevice = ok && it != null && it.Id != null ? MicDevices.ApoOnDevice(it.Id) : null;
+            if (!ok)
+            {
+                l.ForeColor = Accent;
+                l.Text = "The Equalizer needs Equalizer APO (free, open source, no ads). Click the button to install it; Windows asks permission once, then tick your headset and restart.";
+                btn.Text = "Install Equalizer APO (free)";
+            }
+            else if (onDevice == false)
+            {
+                l.ForeColor = Warn;
+                l.Text = "Equalizer APO isn't set up on this device yet, so its EQ does nothing. Click Set up this device, tick it, then restart your PC.";
+                btn.Text = "Set up this device";
+            }
+            else
+            {
+                l.ForeColor = Good;
+                l.Text = onDevice == true ? "Equalizer APO is set up on this device."
+                    : "Equalizer APO is ready. No effect on a device? Tick it in the Equalizer APO Configurator, then restart.";
+            }
+            btn.Visible = !ok || onDevice == false;
+            btn.Enabled = !apoInstalling;
+        }
+
+        void SetUpApoOnDevice()
+        {
+            var it = eqDevice.SelectedItem as DeviceItem;
+            if (!OpenApoDeviceSelector())
+            {
+                eqStatus.Text = "Couldn't open Equalizer APO's device window (Windows permission was declined, or it's missing).";
+                eqStatus.ForeColor = Accent;
+                return;
+            }
+            MessageBox.Show(this, "In the Equalizer APO window, tick " + (it == null ? "your headset" : "\"" + it.Name + "\"") +
+                ", then click OK.\n\nRestart your PC afterwards. Then the EQ works on it.", "SoundDeck", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         void ScheduleApo()
@@ -2050,6 +2083,7 @@ namespace SoundDeck
             if (!force && key == deviceKey) return;
             deviceKey = key;
             renderDevs = r; captureDevs = c;
+            FollowOutputs(); // saved outputs and EQ move to a headset's new ID (FollowDevices.cs)
 
             for (int i = 0; i < 4; i++)
             {

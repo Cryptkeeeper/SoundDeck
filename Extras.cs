@@ -206,13 +206,20 @@ namespace SoundDeck
             MarkInstalledByUs("ApoByUs");
             // Then pick which devices get the EQ. Its setup usually opens that window; open it if not.
             Thread.Sleep(2000);
-            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "EqualizerAPO");
-            if (Process.GetProcessesByName("DeviceSelector").Length == 0 && Process.GetProcessesByName("Configurator").Length == 0)
-            {
-                string sel = Path.Combine(dir, File.Exists(Path.Combine(dir, "DeviceSelector.exe")) ? "DeviceSelector.exe" : "Configurator.exe");
-                if (File.Exists(sel)) try { Process.Start(new ProcessStartInfo(sel) { Verb = "runas", UseShellExecute = true }); } catch { }
-            }
+            OpenApoDeviceSelector();
             say("In the Equalizer APO window, tick your headset, then click OK.");
+        }
+
+        // Equalizer APO's window for picking which devices get the EQ (Windows asks permission). False if it's missing
+        // or permission was declined.
+        static bool OpenApoDeviceSelector()
+        {
+            if (Process.GetProcessesByName("DeviceSelector").Length > 0 || Process.GetProcessesByName("Configurator").Length > 0) return true;
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "EqualizerAPO");
+            string sel = Path.Combine(dir, File.Exists(Path.Combine(dir, "DeviceSelector.exe")) ? "DeviceSelector.exe" : "Configurator.exe");
+            if (!File.Exists(sel)) return false;
+            try { Process.Start(new ProcessStartInfo(sel) { Verb = "runas", UseShellExecute = true }); return true; }
+            catch { return false; }
         }
 
         static void InstallVbCable(Action<string> say)
