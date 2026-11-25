@@ -1,5 +1,5 @@
 // Small helpers about mics that don't need the rest of SoundDeck (so they can be tested on their own):
-// recognising the same headset after Windows gives it a new ID, and taking SoundDeck's old mic section out of
+// recognising the same headset after Windows gives it a new ID (even after Windows deletes the old one), and taking SoundDeck's old mic section out of
 // Equalizer APO's config (1.9.0 moved the mic's voice processing into SoundDeck).
 
 using System;
@@ -56,6 +56,25 @@ namespace SoundDeck
         public static string PlainName(string name)
         {
             return name == null ? null : Regex.Replace(name, @"\(\d+- ", "(");
+        }
+
+        // The saved mic under the ID Windows gives it now. mics = (ID, name) of the real mics Windows has now.
+        // It's matched by Windows' old name for the saved ID or, when Windows deleted that entry, by the name SoundDeck
+        // saved with it. Null when it isn't plugged in (or there's no name to go by).
+        public static string SameMic(string savedId, string savedName, IEnumerable<KeyValuePair<string, string>> mics, Func<string, string> knownName)
+        {
+            string name = PlainName(knownName(savedId) ?? savedName);
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var m in mics)
+                if (string.Equals(PlainName(m.Value), name, StringComparison.OrdinalIgnoreCase)) return m.Key;
+            return null;
+        }
+
+        // True when the saved mic can never come back: Windows deleted its entry, and there's no saved name to find it
+        // by (SoundDeck before 1.9.2 saved only the ID). Then the mic in use should become the saved one.
+        public static bool Forgotten(string savedId, string savedName, Func<string, string> knownName, Func<string, bool> isCapture)
+        {
+            return string.IsNullOrEmpty(savedName) && knownName(savedId) == null && !isCapture(savedId);
         }
 
         // Equalizer APO config text without the "Device: {guid}" sections for mics (and the "# name" line SoundDeck

@@ -1349,7 +1349,7 @@ namespace SoundDeck
             {
                 if (loading) return;
                 var it = micDevice.SelectedItem as DeviceItem;
-                if (it != null) Settings.Set("mic.dev", it.Id);
+                if (it != null) SaveMic(new AudioDevice(it.Id, it.Name));
                 LoadMicLevel();
                 RestartMicMix();
             };
@@ -2070,7 +2070,7 @@ namespace SoundDeck
         {
             var pick = PickRealMic();
             if (pick == null) return "";
-            Settings.Set("mic.dev", pick.Id);
+            SaveMic(pick);
             return pick.Id;
         }
 
@@ -2087,18 +2087,29 @@ namespace SoundDeck
         // The mic to use: the saved one, or the same mic under a new ID. Some USB and wireless headsets (like the Arctis
         // Pro Wireless) get a new Windows ID when they're plugged in again, often into another USB port. Before 1.9.0 this
         // fell back to the first device in the list, which can be Stereo Mix (everything you hear) or a virtual mic.
+        // Windows sometimes deletes the old ID altogether, so the mic's name is saved with it (from 1.9.2).
         string SavedMicId()
         {
             string saved = Settings.Get("mic.dev", null);
             if (saved == null) return RealMicId();
-            if (captureDevs.Any(d => d.Id == saved)) return saved;
-            string name = MicDevices.PlainName(MicDevices.KnownName(saved));
-            var same = name == null ? null : captureDevs.FirstOrDefault(d =>
-                !IsVirtualMic(d.Name) && string.Equals(MicDevices.PlainName(d.Name), name, StringComparison.OrdinalIgnoreCase));
-            if (same != null) { Settings.Set("mic.dev", same.Id); return same.Id; }
-            // Unplugged for now: use another real mic meanwhile, and keep the saved one so it's picked again when it's back.
+            var now = captureDevs.FirstOrDefault(d => d.Id == saved);
+            if (now != null) { SaveMic(now); return saved; } // also saves its name, for mics picked before 1.9.2
+            string savedName = Settings.Get("mic.devName", null);
+            var real = captureDevs.Where(d => !IsVirtualMic(d.Name)).Select(d => new KeyValuePair<string, string>(d.Id, d.Name));
+            string same = MicDevices.SameMic(saved, savedName, real, MicDevices.KnownName);
+            if (same != null) { SaveMic(captureDevs.First(d => d.Id == same)); return same; }
             var pick = PickRealMic();
+            // Windows deleted the saved mic and there's no name to find it by, so it can never come back: keep the one in use.
+            if (pick != null && MicDevices.Forgotten(saved, savedName, MicDevices.KnownName, MicDevices.IsCapture)) { SaveMic(pick); return pick.Id; }
+            // Unplugged for now: use another real mic meanwhile, and keep the saved one so it's picked again when it's back.
             return pick != null ? pick.Id : "";
+        }
+
+        // Saves the mic with its name, so it can be found again after Windows gives it a new ID.
+        void SaveMic(AudioDevice d)
+        {
+            if (Settings.Get("mic.dev", null) != d.Id) Settings.Set("mic.dev", d.Id);
+            if (Settings.Get("mic.devName", null) != d.Name) Settings.Set("mic.devName", d.Name);
         }
 
         void FillDeviceCombo(ComboBox cb, List<AudioDevice> devs, string selectedId, bool includeDefault)
