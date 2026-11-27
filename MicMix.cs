@@ -454,6 +454,7 @@ namespace SoundDeck
             var sources = new Dictionary<uint, CaptureStream>();
             var filters = new MicFilters(); // Microphone page voice processing
             var denoise = new NoiseRemoval.Stream();
+            var breath = new Breath(true); // mutes breathing and vape puffs; this stream drives its readouts
             var dyn = new Dynamics(true); // gate + compressor; this stream drives the live readouts
             var fx = new VoiceFx();
             var echo = new EchoCanceller();
@@ -562,7 +563,9 @@ namespace SoundDeck
                     Array.Clear(streamApps, 0, n);
                     clean.ReadAdd(micBuf, n, 1f); // the mic, echo already taken out
                     filters.Process(micBuf, frames);
+                    breath.Analyze(micBuf, frames); // judged before noise removal, muted after it
                     denoise.Process(micBuf, frames);
+                    breath.Apply(micBuf, frames);
                     dyn.Process(micBuf, frames);
                     fx.Process(micBuf, frames);
                     float vp = 0;
@@ -732,6 +735,7 @@ namespace SoundDeck
             RenderStream outp = null;
             var filters = new MicFilters();
             var denoise = new NoiseRemoval.Stream();
+            var breath = new Breath(false);
             var dyn = new Dynamics(false);
             var fx = new VoiceFx();
             try
@@ -757,7 +761,9 @@ namespace SoundDeck
                         Array.Clear(micBuf, 0, n);
                         cap.Fifo.ReadAdd(micBuf, n, 1f);
                         filters.Process(micBuf, frames);
+                        breath.Analyze(micBuf, frames);
                         denoise.Process(micBuf, frames);
+                        breath.Apply(micBuf, frames);
                         dyn.Process(micBuf, frames);
                         fx.Process(micBuf, frames);
                         float g = Gain;

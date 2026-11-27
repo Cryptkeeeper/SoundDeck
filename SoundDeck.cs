@@ -2066,6 +2066,7 @@ namespace SoundDeck
             TickStreaming();
             TickStreamMonitor();
             TickEcho();
+            TickBreath();
             TickEffectsStatus();
             TickGoxAutostart();
             if (pages["Setup"].Visible) UpdateSetup();

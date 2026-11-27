@@ -198,9 +198,9 @@ namespace SoundDeck
             AddAppDrop(card, exe => SetMic(exe, true), card);
         }
 
-        CheckBox mcNs, echoOn, rawMic;
+        CheckBox mcNs, echoOn, rawMic, breathOn;
         TrackBar mcNsStrength;
-        Label mcNsStatus, mcNsPct, mcNsLine, echoStatus, rawStatus;
+        Label mcNsStatus, mcNsPct, mcNsLine, echoStatus, rawStatus, breathStatus;
         LevelMeter micPageMeter, friendsMeter;
         float friendsLevel;
 
@@ -235,20 +235,28 @@ namespace SoundDeck
             mcHint = Lbl(b, "", 150, 166, 8.5f, false, Dim);
             mcHint.MaximumSize = new Size(640, 0);
 
+            // Breath filter (Breath.cs): mutes sound with no voice in it that lasts longer than a consonant.
+            breathOn = Chk(b, "Mute breathing and vape puffs", 25, 200);
+            breathOn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+            breathOn.Checked = Settings.GetBool("breath.on", false);
+            breathOn.CheckedChanged += (s, e) => { Settings.Set("breath.on", breathOn.Checked); TickBreath(); };
+            breathStatus = Lbl(b, "", 290, 202, 9.5f, true, Dim);
+            tips.SetToolTip(breathOn, "Your voice has a pitch; breathing, vape puffs and blowing air have none. Sound without a voice in it is muted once it lasts longer than an \"s\" or \"h\" at the start of a word. The first moment of a puff can still get through, coughs get through (they have your voice in them), and whispering gets muted too.");
+
             // Echo removal (Echo.cs): what your speakers and headset play, taken back out of the mic.
             // Off unless you turn it on (beta): on the first PC it was tried on, skipping Windows' mic effects did the
             // real work, and echo removal adds 10-30 ms to your voice. It's for speakers loud enough to leak.
-            echoOn = Chk(b, "Remove echo (beta)", 25, 200);
+            echoOn = Chk(b, "Remove echo (beta)", 25, 234);
             echoOn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             echoOn.Checked = Settings.GetBool("echo.on", false);
             echoOn.CheckedChanged += (s, e) => { Settings.Set("echo.on", echoOn.Checked); TickEcho(); };
-            echoStatus = Lbl(b, "", 200, 202, 9.5f, true, Dim);
-            var echoNote = Lbl(b, "Try this if friends hear your speakers, your game or themselves through your mic. It takes what your speakers and headset play back out of your mic. Noise removal can't: that sound is often voices, which it keeps.", 45, 230, 8.5f, false, Dim);
+            echoStatus = Lbl(b, "", 200, 236, 9.5f, true, Dim);
+            var echoNote = Lbl(b, "Try this if friends hear your speakers, your game or themselves through your mic. It takes what your speakers and headset play back out of your mic. Noise removal can't: that sound is often voices, which it keeps.", 45, 264, 8.5f, false, Dim);
             echoNote.MaximumSize = new Size(640, 0);
             tips.SetToolTip(echoOn, "Takes a few seconds to learn after sound starts playing, and adds a little delay (10-30 ms) to your voice. Not used on an output that plays your own voice back (Hear yourself).");
 
             // Windows' own mic effects (CaptureStream.OpenMic explains why they're skipped).
-            rawMic = Chk(b, "Skip Windows' mic effects", 25, 276);
+            rawMic = Chk(b, "Skip Windows' mic effects", 25, 310);
             rawMic.Checked = Settings.GetBool("mic.raw", true);
             CaptureStream.SkipEffects = rawMic.Checked;
             rawMic.CheckedChanged += (s, e) =>
@@ -261,18 +269,37 @@ namespace SoundDeck
                 if (micMeter.Running) micMeter.Stop();
                 TickEcho();
             };
-            rawStatus = Lbl(b, "", 245, 278, 9f, false, Dim);
+            rawStatus = Lbl(b, "", 245, 312, 9f, false, Dim);
             tips.SetToolTip(rawMic, "Windows can add its own noise suppression (Voice Clarity) and other effects to your mic. They fight with echo removal, double up with noise removal and add delay, so SoundDeck takes your mic without them. Untick if your mic sounds worse.");
             EndMicFold(b);
             ApplyNoiseRemoval();
             TickEcho();
+            TickBreath();
         }
 
         string NoiseSummary()
         {
             string ns = !RnNoise.Available ? "Missing" : mcNs.Checked ? "On, " + mcNsStrength.Value + "%" : "Off";
-            if (echoOn == null || !echoOn.Checked) return ns;
-            return ns == "Off" ? "Echo removal on" : ns + ", echo removal on";
+            var extra = new List<string>();
+            if (breathOn != null && breathOn.Checked) extra.Add("puffs muted");
+            if (echoOn != null && echoOn.Checked) extra.Add("echo removal on");
+            if (extra.Count == 0) return ns;
+            string more = string.Join(", ", extra);
+            return ns == "Off" ? char.ToUpper(more[0]) + more.Substring(1) : ns + ", " + more;
+        }
+
+        // Every second: the breath filter's switch and status.
+        void TickBreath()
+        {
+            if (breathOn == null) return;
+            BreathFilter.On = breathOn.Checked;
+            string st; Color c = Dim;
+            if (!breathOn.Checked) st = "Off";
+            else if (!mixEngine.Running) { st = "Turn on Mic Mix so friends get it."; c = Warn; }
+            else if (BreathFilter.Muting) { st = "Muting now"; c = Good; }
+            else { int m = BreathFilter.Mutes; st = m == 0 ? "On. Nothing muted yet." : "On. Muted " + m + (m == 1 ? " time" : " times") + " so far."; c = Good; }
+            if (breathStatus.Text != st) breathStatus.Text = st;
+            breathStatus.ForeColor = c;
         }
 
         // Every second: which outputs echo removal listens to, and its status. Every real output, except one that
