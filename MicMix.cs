@@ -64,6 +64,35 @@ namespace SoundDeck
         public void ActivateCompleted(IActivateAudioInterfaceAsyncOperation op) { Done.Set(); }
     }
 
+    // IAudioClient2, only to ask for a mic without Windows' audio effects ("raw").
+    [ComImport, Guid("726778CD-F60A-4eda-82DE-E47610CD78AA"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioClient2
+    {
+        void Initialize(int shareMode, int streamFlags, long bufferDuration, long periodicity, IntPtr format, IntPtr sessionGuid);
+        void GetBufferSize(out uint frames);
+        void GetStreamLatency(out long latency);
+        void GetCurrentPadding(out uint frames);
+        void IsFormatSupported_();
+        void GetMixFormat(out IntPtr format);
+        void GetDevicePeriod(out long def, out long min);
+        void Start();
+        void Stop();
+        void Reset();
+        void SetEventHandle(IntPtr handle);
+        void GetService(ref Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object service);
+        void IsOffloadCapable(int category, [MarshalAs(UnmanagedType.Bool)] out bool capable);
+        void SetClientProperties(ref AudioClientProperties props);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct AudioClientProperties
+    {
+        public int cbSize;
+        [MarshalAs(UnmanagedType.Bool)] public bool bIsOffload;
+        public int eCategory;
+        public int Options; // 1 = AUDCLNT_STREAMOPTIONS_RAW
+    }
+
     [StructLayout(LayoutKind.Sequential, Pack = 2)]
     struct WaveFormatEx
     {
@@ -105,11 +134,24 @@ namespace SoundDeck
             }
         }
 
-        public void ReadAdd(float[] dst, int n, float gain)
+        // Returns how many samples were there to read (the rest of dst is left as it was).
+        public int ReadAdd(float[] dst, int n, float gain)
         {
             int m = Math.Min(n, count);
             for (int i = 0; i < m; i++) dst[i] += buf[(head + i) % buf.Length] * gain;
             head = (head + m) % buf.Length; count -= m;
+            return m;
+        }
+
+        // Adds samples from an array (interleaved stereo; an even count).
+        public void Write(float[] src, int samples)
+        {
+            for (int i = 0; i < samples; i++)
+            {
+                if (count == buf.Length) { head = (head + 2) % buf.Length; count -= 2; }
+                buf[(head + count) % buf.Length] = src[i];
+                count++;
+            }
         }
 
         public void Discard(int n)
@@ -118,9 +160,13 @@ namespace SoundDeck
             head = (head + m) % buf.Length; count -= m;
         }
 
-        public void TrimTo(int max)
+        // Returns how many samples were dropped.
+        public int TrimTo(int max)
         {
-            if (count > max) Discard(count - max);
+            if (count <= max) return 0;
+            int drop = count - max;
+            Discard(drop);
+            return drop;
         }
     }
 
@@ -184,6 +230,42 @@ namespace SoundDeck
             var s = new CaptureStream();
             s.client = MixFormat.ActivateDevice(en, id);
             s.Init(MixFormat.AUTOCONVERT, false);
+            return s;
+        }
+
+        // Windows can run its own effects on a mic before any app gets it (Voice Clarity's noise suppression, a
+        // driver's "enhancements"). They jump the level around from moment to moment, which stops echo removal from
+        // learning how your speakers reach the mic, and they stack with SoundDeck's own noise removal and add delay.
+        // So SoundDeck's mic streams ask for the mic without them ("raw") when SkipEffects is on, and fall back to the
+        // normal mic when the device doesn't allow it.
+        public static volatile bool SkipEffects = true;
+        public bool IsRaw;
+
+        public static CaptureStream OpenMic(IMMDeviceEnumerator en, string id)
+        {
+            if (SkipEffects)
+            {
+                try
+                {
+                    var s = new CaptureStream();
+                    s.client = MixFormat.ActivateDevice(en, id);
+                    var props = new AudioClientProperties { cbSize = Marshal.SizeOf(typeof(AudioClientProperties)), Options = 1 };
+                    ((IAudioClient2)s.client).SetClientProperties(ref props);
+                    s.Init(MixFormat.AUTOCONVERT, false);
+                    s.IsRaw = true;
+                    return s;
+                }
+                catch { }
+            }
+            return OpenDevice(en, id);
+        }
+
+        // What an output is playing, as Windows mixes it (for echo removal).
+        public static CaptureStream OpenLoopback(IMMDeviceEnumerator en, string renderId)
+        {
+            var s = new CaptureStream();
+            s.client = MixFormat.ActivateDevice(en, renderId);
+            s.Init(MixFormat.LOOPBACK | MixFormat.AUTOCONVERT, false);
             return s;
         }
 
@@ -321,6 +403,15 @@ namespace SoundDeck
         public bool Running { get { return thread != null && thread.IsAlive; } }
         public string StreamDeviceId { get { return streamId; } }
 
+        // Echo removal (Echo.cs): the outputs whose sound is taken back out of your mic. Set a new array to change it.
+        public volatile string[] EchoOutputs = new string[0];
+        public volatile bool MicRaw;               // the mic is coming in without Windows' effects
+        static readonly string[] NoOutputs = new string[0];
+
+        // What friends hear: your voice after all the cleanup (peak since the last look), for the Microphone page.
+        float voicePeak;
+        public float TakeVoicePeak() { float p = voicePeak; voicePeak = 0; return p; }
+
         // Listen to your stream: plays the stream mix (or the chat mix) into your headset so you can check it.
         public volatile string MonitorId;          // output device, null = off
         public volatile bool MonitorChat;          // false = what the stream hears, true = what Discord hears
@@ -365,12 +456,19 @@ namespace SoundDeck
             var denoise = new NoiseRemoval.Stream();
             var dyn = new Dynamics(true); // gate + compressor; this stream drives the live readouts
             var fx = new VoiceFx();
+            var echo = new EchoCanceller();
+            var echoRefs = new List<EchoRef>();
+            string[] echoOpen = null;
+            bool echoWasOn = false;
+            var clean = new Fifo();                   // the mic after echo removal, waiting for the cable
+            var arrivedBuf = new float[4096];
             RenderStream monOut = null;
             string monOpen = null;
             try
             {
                 var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
-                mic = CaptureStream.OpenDevice(en, micId);
+                mic = CaptureStream.OpenMic(en, micId);
+                MicRaw = mic.IsRaw;
                 outp = RenderStream.Open(en, cableId);
                 if (streamId != null)
                 {
@@ -414,12 +512,45 @@ namespace SoundDeck
                         }
                     }
 
+                    // Echo removal: listen to each output it should take back out of the mic.
+                    var echoWant = EchoRemoval.On ? EchoOutputs : NoOutputs;
+                    if (!ReferenceEquals(echoWant, echoOpen))
+                    {
+                        echoOpen = echoWant;
+                        foreach (var r in echoRefs.Where(r => !echoWant.Contains(r.DeviceId)).ToList()) { r.Dispose(); echoRefs.Remove(r); }
+                        foreach (var id in echoWant.Where(id => !echoRefs.Any(r => r.DeviceId == id)))
+                        {
+                            try { echoRefs.Add(new EchoRef(en, id)); } catch { } // a device that can't be listened to is skipped
+                        }
+                    }
+
                     mic.Pump();
                     foreach (var pid in sources.Keys.ToList())
                     {
                         try { sources[pid].Pump(); }
                         catch { sources[pid].Dispose(); sources.Remove(pid); }
                     }
+                    foreach (var r in echoRefs.ToList())
+                    {
+                        try { r.Pump(); }
+                        catch { r.Dispose(); echoRefs.Remove(r); }
+                    }
+
+                    // Echo removal runs on the mic as it arrives (steady 10 ms packets), so what the outputs play stays
+                    // lined up with it. The cable below takes mic sound in uneven bursts (up to 40 ms at once), which
+                    // the outputs' sound can't keep pace with. The cleaned mic waits in `clean` for the cable.
+                    bool echoOn = echoRefs.Count > 0;
+                    if (echoOn != echoWasOn) { echo.Restart(); echoWasOn = echoOn; if (!echoOn) EchoRemoval.Active = false; }
+                    int arrived = mic.Fifo.Count / 2;
+                    if (arrived > 0)
+                    {
+                        if (arrivedBuf.Length < arrived * 2) arrivedBuf = new float[arrived * 2];
+                        Array.Clear(arrivedBuf, 0, arrived * 2);
+                        mic.Fifo.ReadAdd(arrivedBuf, arrived * 2, 1f);
+                        if (echoOn) echo.Push(arrivedBuf, arrived);
+                        else clean.Write(arrivedBuf, arrived * 2);
+                    }
+                    if (echoOn) echo.Run(echoRefs, clean); // waits (a few ms) for the outputs' matching sound
 
                     int frames = outp.FramesToWrite(TargetFrames);
                     if (frames <= 0) continue;
@@ -429,11 +560,15 @@ namespace SoundDeck
                     Array.Clear(boardBuf, 0, n);
                     Array.Clear(mediaBuf, 0, n);
                     Array.Clear(streamApps, 0, n);
-                    mic.Fifo.ReadAdd(micBuf, n, 1f);
+                    clean.ReadAdd(micBuf, n, 1f); // the mic, echo already taken out
                     filters.Process(micBuf, frames);
                     denoise.Process(micBuf, frames);
                     dyn.Process(micBuf, frames);
                     fx.Process(micBuf, frames);
+                    float vp = 0;
+                    for (int i = 0; i < n; i++) { float a = micBuf[i] < 0 ? -micBuf[i] : micBuf[i]; if (a > vp) vp = a; }
+                    vp *= MicGain;
+                    if (vp > voicePeak) voicePeak = vp;
                     Board.ReadAdd(boardBuf, n);
                     float mg = MediaOn ? MediaGain : 0f;
                     foreach (var kv in sources)
@@ -498,7 +633,7 @@ namespace SoundDeck
                     }
 
                     // Keep latency from creeping up if a device's clock runs slightly fast.
-                    mic.Fifo.TrimTo(TargetFrames * 2 * 3);
+                    clean.TrimTo(TargetFrames * 2 * 3);
                     foreach (var s in sources.Values) s.Fifo.TrimTo(TargetFrames * 2 * 3);
                 }
                 Status = "Off";
@@ -517,6 +652,8 @@ namespace SoundDeck
                 StreamStatus = "Off";
                 MonitorStatus = "Off";
                 denoise.Dispose();
+                foreach (var r in echoRefs) r.Dispose();
+                EchoRemoval.Active = false;
             }
         }
 
@@ -600,7 +737,7 @@ namespace SoundDeck
             try
             {
                 var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
-                if (capId != null) cap = CaptureStream.OpenDevice(en, capId);
+                if (capId != null) cap = CaptureStream.OpenMic(en, capId);
                 outp = RenderStream.Open(en, outId);
                 Status = "Running";
                 var mix = new float[MixFormat.Rate * 2];
@@ -687,7 +824,7 @@ namespace SoundDeck
             try
             {
                 var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
-                cap = CaptureStream.OpenDevice(en, DeviceId);
+                cap = CaptureStream.OpenMic(en, DeviceId);
                 var buf = new float[Block * 2];
                 var hist = new Queue<float>();
                 // Measured after the Microphone page's filters and boost, as friends get it (the gate's "Opens at"

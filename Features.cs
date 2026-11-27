@@ -198,15 +198,16 @@ namespace SoundDeck
             AddAppDrop(card, exe => SetMic(exe, true), card);
         }
 
-        CheckBox mcNs;
+        CheckBox mcNs, echoOn, rawMic;
         TrackBar mcNsStrength;
-        Label mcNsStatus, mcNsPct, mcNsLine;
-        LevelMeter micPageMeter;
+        Label mcNsStatus, mcNsPct, mcNsLine, echoStatus, rawStatus;
+        LevelMeter micPageMeter, friendsMeter;
+        float friendsLevel;
 
-        // "Noise removal" section on the Microphone page (built from BuildMic).
+        // "Noise and echo removal" section on the Microphone page (built from BuildMic).
         void BuildNoiseSection()
         {
-            var b = MicFold("noise", "Noise removal", () => !RnNoise.Available ? "Missing" : mcNs.Checked ? "On, " + mcNsStrength.Value + "%" : "Off");
+            var b = MicFold("noise", "Noise and echo removal", NoiseSummary);
             mcNs = Chk(b, "Remove noise", 25, 6);
             mcNs.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             mcNs.Checked = Settings.GetBool("ns.on", true);
@@ -223,14 +224,88 @@ namespace SoundDeck
             Lbl(b, "Your mic", 45, 86, 9.5f, false, Dim);
             micPageMeter = new LevelMeter(MicColor) { Horizontal = true, Left = 150, Top = 91, Width = 300, Height = 8 };
             b.Controls.Add(micPageMeter);
-            tips.SetToolTip(micPageMeter, "Your mic level. The white line is your background noise; your voice should be well above it.");
-            Lbl(b, "Background", 45, 118, 9.5f, false, Dim);
-            mcNoise = Lbl(b, "", 150, 116, 10f, true, Dim);
-            mcNoiseDb = Lbl(b, "", 262, 118, 9.5f, false, Dim);
-            mcHint = Lbl(b, "", 150, 142, 8.5f, false, Dim);
+            tips.SetToolTip(micPageMeter, "Your mic as it is, before any cleanup. The white line is your background noise; your voice should be well above it.");
+            Lbl(b, "Friends hear", 45, 110, 9.5f, false, Dim);
+            friendsMeter = new LevelMeter(MicColor) { Horizontal = true, Left = 150, Top = 115, Width = 300, Height = 8 };
+            b.Controls.Add(friendsMeter);
+            tips.SetToolTip(friendsMeter, "Your mic after echo removal, noise removal and the rest: what goes to Harmony. It should stay empty while you're quiet.");
+            Lbl(b, "Background", 45, 142, 9.5f, false, Dim);
+            mcNoise = Lbl(b, "", 150, 140, 10f, true, Dim);
+            mcNoiseDb = Lbl(b, "", 262, 142, 9.5f, false, Dim);
+            mcHint = Lbl(b, "", 150, 166, 8.5f, false, Dim);
             mcHint.MaximumSize = new Size(640, 0);
+
+            // Echo removal (Echo.cs): what your speakers and headset play, taken back out of the mic.
+            // Off unless you turn it on (beta): on the first PC it was tried on, skipping Windows' mic effects did the
+            // real work, and echo removal adds 10-30 ms to your voice. It's for speakers loud enough to leak.
+            echoOn = Chk(b, "Remove echo (beta)", 25, 200);
+            echoOn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+            echoOn.Checked = Settings.GetBool("echo.on", false);
+            echoOn.CheckedChanged += (s, e) => { Settings.Set("echo.on", echoOn.Checked); TickEcho(); };
+            echoStatus = Lbl(b, "", 200, 202, 9.5f, true, Dim);
+            var echoNote = Lbl(b, "Try this if friends hear your speakers, your game or themselves through your mic. It takes what your speakers and headset play back out of your mic. Noise removal can't: that sound is often voices, which it keeps.", 45, 230, 8.5f, false, Dim);
+            echoNote.MaximumSize = new Size(640, 0);
+            tips.SetToolTip(echoOn, "Takes a few seconds to learn after sound starts playing, and adds a little delay (10-30 ms) to your voice. Not used on an output that plays your own voice back (Hear yourself).");
+
+            // Windows' own mic effects (CaptureStream.OpenMic explains why they're skipped).
+            rawMic = Chk(b, "Skip Windows' mic effects", 25, 276);
+            rawMic.Checked = Settings.GetBool("mic.raw", true);
+            CaptureStream.SkipEffects = rawMic.Checked;
+            rawMic.CheckedChanged += (s, e) =>
+            {
+                Settings.Set("mic.raw", rawMic.Checked);
+                CaptureStream.SkipEffects = rawMic.Checked;
+                // Reopen the mic everywhere SoundDeck listens to it.
+                if (mixEngine.Running) { mixEngine.Stop(); mixLastStart = -100; TickMicMix(); }
+                if (sideEngine.Running) { sideEngine.Stop(); sideLastStart = -100; TickHearYourself(); }
+                if (micMeter.Running) micMeter.Stop();
+                TickEcho();
+            };
+            rawStatus = Lbl(b, "", 245, 278, 9f, false, Dim);
+            tips.SetToolTip(rawMic, "Windows can add its own noise suppression (Voice Clarity) and other effects to your mic. They fight with echo removal, double up with noise removal and add delay, so SoundDeck takes your mic without them. Untick if your mic sounds worse.");
             EndMicFold(b);
             ApplyNoiseRemoval();
+            TickEcho();
+        }
+
+        string NoiseSummary()
+        {
+            string ns = !RnNoise.Available ? "Missing" : mcNs.Checked ? "On, " + mcNsStrength.Value + "%" : "Off";
+            if (echoOn == null || !echoOn.Checked) return ns;
+            return ns == "Off" ? "Echo removal on" : ns + ", echo removal on";
+        }
+
+        // Every second: which outputs echo removal listens to, and its status. Every real output, except one that
+        // plays your own voice back to you (Hear yourself, or Listen to stream with your voice): that sound is your
+        // voice, and taking it out of the mic would take you out too.
+        void TickEcho()
+        {
+            if (echoOn == null) return;
+            var skip = new HashSet<string>();
+            if (sideEngine.Running && sideEngine.OutputId != null) skip.Add(sideEngine.OutputId);
+            if (mixEngine.MonitorId != null && mixEngine.MonitorVoice) skip.Add(mixEngine.MonitorId);
+            var want = renderDevs.Where(d => !IsVirtualOutput(d.Name) && !IsVirtualCableOut(d.Name) && !skip.Contains(d.Id))
+                .Select(d => d.Id).OrderBy(x => x).ToArray();
+            if (!want.SequenceEqual(mixEngine.EchoOutputs)) mixEngine.EchoOutputs = want;
+            EchoRemoval.On = echoOn.Checked;
+
+            string st; Color c = Dim;
+            if (!echoOn.Checked) st = "Off";
+            else if (!mixEngine.Running) { st = "Turn on Mic Mix so friends get the clean mic."; c = Warn; }
+            else if (want.Length == 0) st = "No speakers or headset to listen to.";
+            else if (EchoRemoval.Active)
+            {
+                int cut = (int)Math.Round(EchoRemoval.CutDb);
+                st = cut >= 3 ? "Removing echo (your mic is " + cut + " dB quieter)" : "Listening to what plays";
+                c = Good;
+            }
+            else st = "Ready. Nothing is playing.";
+            if (echoStatus.Text != st) echoStatus.Text = st;
+            echoStatus.ForeColor = c;
+
+            string rs = !rawMic.Checked || !mixEngine.Running ? "" : mixEngine.MicRaw ? "Skipped" : "Your mic doesn't allow it, so they stay on.";
+            if (rawStatus.Text != rs) rawStatus.Text = rs;
+            rawStatus.ForeColor = rs == "Skipped" ? Good : Dim;
         }
 
         void ApplyNoiseRemoval()
@@ -314,6 +389,12 @@ namespace SoundDeck
             mcLevel = Math.Max(MeterPos(micMeter.TakePeak()), mcLevel - 0.04f);
             mcMeter.Value = mcLevel;
             micPageMeter.Value = mcLevel;
+            if (friendsMeter != null)
+            {
+                float fp = mixEngine.Running ? mixEngine.TakeVoicePeak() : 0f;
+                friendsLevel = Math.Max(fp > 0 ? MeterPos(fp) : 0f, friendsLevel - 0.04f);
+                friendsMeter.Value = friendsLevel;
+            }
 
             float noise = micMeter.Noise;
             if (noise <= 0) { mcMeter.Marker = micPageMeter.Marker = -1; mcNoise.Text = "Listening..."; mcNoise.ForeColor = Dim; mcNoiseDb.Text = ""; mcHint.Text = ""; return; }
